@@ -1,0 +1,47 @@
+# AInTandem
+.flexy-qwen
+.flexy-claude
+.flexy-gemini
+.flexy-codex
+.cospec-sync
+.kai-notify.json
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+dist-electron
+release
+build
+out
+
+# Resources (bundled images - large files)
+resources/*.tar.gz
+resources/image-manifest.json
+resources/bundled-runtime/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local

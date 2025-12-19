@@ -1,0 +1,109 @@
+{
+  "name": "kai-desktop",
+  "version": "1.0.0",
+  "description": "Kai Desktop - Standalone container management application",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "dist:bundled": "node scripts/download-bundled-runtime.js --current-platform && pnpm dist",
+    "dist:bundled:all": "node scripts/download-bundled-runtime.js && pnpm dist",
+    "download-runtime": "node scripts/download-bundled-runtime.js",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix"
+  },
+  "keywords": [
+    "electron",
+    "docker",
+    "containers",
+    "kai"
+  ],
+  "author": "Kai Team",
+  "license": "MIT",
+  "packageManager": "pnpm@10.15.1",
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@eslint/js": "^9.38.0",
+    "@types/dockerode": "^3.3.45",
+    "@types/node": "^24.9.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^4.0.1",
+    "eslint": "^9.38.0",
+    "eslint-plugin-electron": "^7.0.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^16.4.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.9",
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.6.2"
+  },
+  "build": {
+    "appId": "com.kai.desktop",
+    "productName": "Kai Desktop",
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "Development",
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
