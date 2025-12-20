@@ -159,16 +159,8 @@ function openAInTandemWindow() {
     show: true
   });
 
-  // Load the AInTandem frontend
-  if (process.env.NODE_ENV === 'development') {
-    aintandemWindow.loadURL('http://localhost:9901');
-  } else {
-    // In production, load from local file or API endpoint as appropriate
-    aintandemWindow.loadURL('http://localhost:9901');
-  }
-
   // Check for login page and perform automatic login if credentials are available
-  aintandemWindow.webContents.on('did-finish-load', async () => {
+  const handleLoginPage = async () => {
     try {
       // Get the current URL
       const currentURL = aintandemWindow.webContents.getURL();
@@ -178,81 +170,95 @@ function openAInTandemWindow() {
         // Execute script to perform automatic login using only ID selectors
         const loginScript = `
           (function() {
-            // Wait for the page to fully load
-            setTimeout(async () => {
-              if (window.aintandemCredentials) {
-                try {
-                  const creds = await window.aintandemCredentials.getBackendCredentials();
+            // Function to attempt login with retry mechanism
+            async function attemptLogin(maxRetries = 3, delay = 1000) {
+              for (let attempt = 0; attempt < maxRetries; attempt++) {
+                if (window.aintandemCredentials) {
+                  try {
+                    const creds = await window.aintandemCredentials.getBackendCredentials();
 
-                  // Select fields using only their IDs
-                  const usernameField = document.querySelector('#username');
-                  const passwordField = document.querySelector('#password');
+                    // Select fields using only their IDs
+                    const usernameField = document.querySelector('#username');
+                    const passwordField = document.querySelector('#password');
 
-                  if (usernameField && passwordField) {
-                    // Use native input value setter to properly update the field for frameworks like React
-                    const setNativeValue = Object.getOwnPropertyDescriptor(
-                      window.HTMLInputElement.prototype,
-                      'value'
-                    ).set;
+                    if (usernameField && passwordField) {
+                      // Use native input value setter to properly update the field for frameworks like React
+                      const setNativeValue = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype,
+                        'value'
+                      ).set;
 
-                    // Fill in the username using the native setter
-                    setNativeValue.call(usernameField, creds.username);
-                    usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-                    usernameField.dispatchEvent(new Event('change', { bubbles: true }));
+                      // Fill in the username using the native setter
+                      setNativeValue.call(usernameField, creds.username);
+                      usernameField.dispatchEvent(new Event('input', { bubbles: true }));
+                      usernameField.dispatchEvent(new Event('change', { bubbles: true }));
 
-                    // Fill in the password using keyboard events character by character
-                    // Clear the field first
-                    setNativeValue.call(passwordField, '');
-                    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-                    passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+                      // Fill in the password using keyboard events character by character
+                      // Clear the field first
+                      setNativeValue.call(passwordField, '');
+                      passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+                      passwordField.dispatchEvent(new Event('change', { bubbles: true }));
 
-                    // Type each character of the password individually
-                    const password = creds.password;
-                    for (let i = 0; i < password.length; i++) {
-                      const char = password[i];
+                      // Type each character of the password individually
+                      const password = creds.password;
+                      for (let i = 0; i < password.length; i++) {
+                        const char = password[i];
 
-                      // Insert the character
-                      const start = passwordField.selectionStart || i;
-                      const end = passwordField.selectionEnd || i;
-                      const currentValue = passwordField.value;
-                      const newValue = currentValue.substring(0, start) + char + currentValue.substring(end);
+                        // Insert the character
+                        const start = passwordField.selectionStart || i;
+                        const end = passwordField.selectionEnd || i;
+                        const currentValue = passwordField.value;
+                        const newValue = currentValue.substring(0, start) + char + currentValue.substring(end);
 
-                      // Use the native setter to update the value
-                      setNativeValue.call(passwordField, newValue);
+                        // Use the native setter to update the value
+                        setNativeValue.call(passwordField, newValue);
 
-                      // Update cursor position
-                      passwordField.setSelectionRange(start + 1, start + 1);
+                        // Update cursor position
+                        passwordField.setSelectionRange(start + 1, start + 1);
 
-                      // Dispatch input event for each character
-                      passwordField.dispatchEvent(new InputEvent('input', {
-                        inputType: 'insertText',
-                        data: char,
-                        bubbles: true,
-                        cancelable: true
-                      }));
+                        // Dispatch input event for each character
+                        passwordField.dispatchEvent(new InputEvent('input', {
+                          inputType: 'insertText',
+                          data: char,
+                          bubbles: true,
+                          cancelable: true
+                        }));
 
-                      // Dispatch keyboard events
-                      passwordField.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-                      passwordField.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
-                      passwordField.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                        // Dispatch keyboard events
+                        passwordField.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+                        passwordField.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
+                        passwordField.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                      }
+
+                      // Final input and change events after typing is complete
+                      passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+                      passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                      // Find and click the submit button
+                      const submitButton = document.querySelector('form button[type="submit"]');
+                      if (submitButton) {
+                        submitButton.click();
+                      }
+                      console.log('Auto login !!!');
+                      return true; // Success
                     }
-
-                    // Final input and change events after typing is complete
-                    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-                    passwordField.dispatchEvent(new Event('change', { bubbles: true }));
-
-                    // Find and click the submit button
-                    const submitButton = document.querySelector('form button[type="submit"]');
-                    if (submitButton) {
-                      submitButton.click();
-                    }
-                    console.log('Auto login !!!');
+                  } catch (error) {
+                    console.error('Automatic login attempt failed:', error);
                   }
-                } catch (error) {
-                  console.error('Automatic login failed:', error);
+                }
+
+                // Wait before next attempt
+                if (attempt < maxRetries - 1) {
+                  await new Promise(resolve => setTimeout(resolve, delay));
                 }
               }
-            }, 1500); // Wait 1.5 seconds for page to load
+
+              console.error('Automatic login failed after', maxRetries, 'attempts');
+              return false; // Failed after max retries
+            }
+
+            // Start the login attempt process
+            attemptLogin();
           })();
         `;
 
@@ -261,7 +267,17 @@ function openAInTandemWindow() {
     } catch (error) {
       console.error('Error during automatic login check:', error);
     }
-  });
+  };
+
+  aintandemWindow.webContents.on('did-navigate-in-page', handleLoginPage);
+
+  // Load the AInTandem frontend
+  if (process.env.NODE_ENV === 'development') {
+    aintandemWindow.loadURL('http://localhost:9901');
+  } else {
+    // In production, load from local file or API endpoint as appropriate
+    aintandemWindow.loadURL('http://localhost:9901');
+  }
 
   // Register the AInTandem window with the service manager to receive events
   try {
@@ -291,7 +307,7 @@ function openAInTandemWindow() {
 function createTray() {
   // Create a simple 16x16 icon (you should replace this with actual icon files)
   const icon = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAEbSURBVDiNpZKxSgNBEIa/2b0kJyFgI1gIFoKFhY2FhY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NhY2FhRBIISRgISQQSHI7M9bZXHKJhQ/LzPD/M7Mz/wjgH6UUAEopAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAUkoApJQASCkBkFICIKUEQEoJgJQSACklAFJKAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAUkoApJQASCkBkFICIKUEQEoJgJQSACklAFJKAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAn1kcZDLNPvwAAAAASUVORK5CYII='
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlna3NjYXBlLm9yZ5vuPBoAAAEbSURBVDiNpZKxSgNBEIa/2b0kJyFgI1gIFoKFhY2FhY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NhY2FhRBIISRgISQQSHI7M9bZXHKJhQ/LzPD/M7Mz/wjgH6UUAEopAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAUkoApJQASCkBkFICIKUEQEoJgJQSACklAFJKAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAUkoApJQASCkBkFICIKUEQEoJgJQSACklAFJKAKSUAEgpAZBSAiClBEBKCYCUEgApJQBSSgCklABIKQGQUgIgpQRASgmAlBIAKSUAn1kcZDLNPvwAAAAASUVORK5CYII='
   )
 
   tray = new Tray(icon)
@@ -1219,4 +1235,3 @@ ipcMain.handle('update:install', async () => {
 })
 
 console.log('IPC handlers registered')
-

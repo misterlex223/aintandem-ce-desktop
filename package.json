@@ -86,15 +86,13 @@
     },
     "win": {
       "target": [
-        "nsis",
-        "zip"
+        "nsis"
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [
-        "AppImage",
-        "tar.gz"
+        "AppImage"
       ],
       "category": "Development",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
