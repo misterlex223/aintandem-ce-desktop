@@ -1,8 +1,8 @@
-# Kai Desktop First-Time Launch Setup Process
+# AInTandem Desktop First-Time Launch Setup Process
 
 ## Overview
 
-This document provides a comprehensive overview of the Kai Desktop application's first-time launch setup process. It covers all components involved in configuring the application for new users, from initial configuration storage to the final dashboard view.
+This document provides a comprehensive overview of the AInTandem Desktop application's first-time launch setup process. It covers all components involved in configuring the application for new users, from initial configuration storage to the final dashboard view.
 
 ## Setup Process Flow
 
@@ -38,9 +38,7 @@ interface KaiConfig {
   baseDirectory: string
   services: {
     backend: { port: number, nodeEnv: 'development' | 'production' }
-    neo4j: { password: string, port: number }
     codeServer: { password: string, port: number }
-    qdrant: { apiKey: string, port: number }
   }
 }
 ```
@@ -71,9 +69,7 @@ interface KaiConfig {
 - `src/main/services/service-manager.ts`
 
 **Service Definitions:**
-- Backend: Core API server (depends on qdrant, neo4j)
-- Neo4j: Graph database for context system
-- Qdrant: Vector database for context system
+- Backend: Core API server
 - Code Server: VS Code web IDE
 
 **Auto-Recovery Features:**
@@ -117,8 +113,7 @@ interface KaiConfig {
 7. Transition to dashboard
 
 **Configuration Collection:**
-- Base directory path (default: ~/KaiBase)
-- Neo4j password
+- Base directory path (default: ~/AiTBase)
 - Code-server password
 - Cloud frontend URL (optional)
 
@@ -126,7 +121,7 @@ interface KaiConfig {
 
 ### Initial Application Start
 
-When users first launch Kai Desktop:
+When users first launch AInTandem Desktop:
 
 1. The application checks if setup has been completed by examining the configuration store
 2. If `setupCompleted` is false, the Setup Wizard is displayed
@@ -146,7 +141,7 @@ Users can manually select their preferred runtime through the Runtime Mode Selec
 The Setup Wizard collects:
 
 - Base directory for project storage (with intelligent defaults)
-- Service passwords for neo4j and code-server
+- Service passwords for code-server
 - Validation of user inputs before proceeding
 
 ### Runtime Setup
@@ -175,7 +170,7 @@ After successful setup:
 
 ### For Developers
 - Development Mode with Docker Desktop provides the most features
-- Ensure Docker Desktop is running before starting Kai Desktop in development mode
+- Ensure Docker Desktop is running before starting AInTandem Desktop in development mode
 - Consider the larger download size when using bundled runtime
 
 ## Troubleshooting Common Issues

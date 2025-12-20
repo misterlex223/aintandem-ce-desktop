@@ -1,6 +1,6 @@
 # Bundled Container Runtime
 
-Kai Desktop can include a bundled containerd runtime in distribution packages, making it fully standalone without requiring Docker Desktop.
+AInTandem Desktop can include a bundled containerd runtime in distribution packages, making it fully standalone without requiring Docker Desktop.
 
 ## Overview
 

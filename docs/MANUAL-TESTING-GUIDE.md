@@ -1,6 +1,6 @@
-# Kai Desktop - Manual Testing Guide
+# AInTandem Desktop - Manual Testing Guide
 
-This document provides comprehensive manual testing procedures for all features of Kai Desktop. Follow these test cases to verify functionality before release.
+This document provides comprehensive manual testing procedures for all features of AInTandem Desktop. Follow these test cases to verify functionality before release.
 
 ## Table of Contents
 
@@ -67,7 +67,7 @@ pnpm package
 **Prerequisites:** Docker Desktop running
 
 **Steps:**
-1. Launch Kai Desktop for the first time
+1. Launch AInTandem Desktop for the first time
 2. Observe runtime detection
 3. Check initialization logs
 
@@ -83,7 +83,7 @@ pnpm package
 
 **Steps:**
 1. Stop Docker Desktop
-2. Launch Kai Desktop
+2. Launch AInTandem Desktop
 3. Observe runtime detection
 
 **Expected Result:**
@@ -95,7 +95,7 @@ pnpm package
 **TC-CORE-003: Subsequent Launch**
 
 **Steps:**
-1. Launch Kai Desktop (already configured)
+1. Launch AInTandem Desktop (already configured)
 2. Observe load time
 
 **Expected Result:**
@@ -109,7 +109,7 @@ pnpm package
 **TC-CONFIG-001: Settings Panel Access**
 
 **Steps:**
-1. Launch Kai Desktop
+1. Launch AInTandem Desktop
 2. Click ⚙️ Settings button (top-right)
 3. Observe settings modal
 
@@ -155,7 +155,7 @@ pnpm package
 **Prerequisites:** Fresh Docker/containerd installation
 
 **Steps:**
-1. Launch Kai Desktop (first time)
+1. Launch AInTandem Desktop (first time)
 2. Wait for initialization
 3. Verify network creation:
    ```bash
@@ -170,21 +170,20 @@ pnpm package
 **TC-INFRA-002: Volume Creation**
 
 **Steps:**
-1. Launch Kai Desktop (first time)
+1. Launch AInTandem Desktop (first time)
 2. Verify volumes created:
    ```bash
    docker volume ls | grep kai
    ```
 
 **Expected Result:**
-- ✅ `kai-neo4j-data` volume exists
-- ✅ `kai-qdrant-data` volume exists
+- ✅ `kai-data` volume exists
 - ✅ Volumes are empty (first launch)
 
 **TC-INFRA-003: Infrastructure Reuse**
 
 **Steps:**
-1. Launch Kai Desktop (subsequent launch)
+1. Launch AInTandem Desktop (subsequent launch)
 2. Check console logs
 
 **Expected Result:**
@@ -205,7 +204,7 @@ pnpm package
 
 **Steps:**
 1. Stop Docker Desktop
-2. Launch Kai Desktop
+2. Launch AInTandem Desktop
 3. Check runtime detection
 
 **Expected Result:**
@@ -219,7 +218,7 @@ pnpm package
 **Steps:**
 1. Start with Docker runtime
 2. Stop Docker Desktop
-3. Restart Kai Desktop
+3. Restart AInTandem Desktop
 
 **Expected Result:**
 - ✅ Auto-switches to containerd
@@ -250,7 +249,7 @@ pnpm package
 **Prerequisites:** Fresh containerd install, no images loaded
 
 **Steps:**
-1. Launch Kai Desktop (first time with containerd)
+1. Launch AInTandem Desktop (first time with containerd)
 2. Observe image loading process
 3. Verify images:
    ```bash
@@ -268,7 +267,7 @@ pnpm package
 **Prerequisites:** Images already loaded
 
 **Steps:**
-1. Launch Kai Desktop (subsequent launch)
+1. Launch AInTandem Desktop (subsequent launch)
 2. Check console logs
 
 **Expected Result:**
@@ -413,11 +412,11 @@ pnpm package
 **TC-TRAY-001: Tray Icon Appears**
 
 **Steps:**
-1. Launch Kai Desktop
+1. Launch AInTandem Desktop
 2. Check system tray/menu bar
 
 **Expected Result:**
-- ✅ Kai Desktop icon appears
+- ✅ AInTandem Desktop icon appears
 - ✅ Icon is visible and clear
 - ✅ Platform-appropriate location
 
@@ -522,7 +521,7 @@ pnpm package
 
 **Expected Result:**
 - ✅ All services shown as nodes
-- ✅ Backend shows dependencies on Neo4j & Qdrant
+- ✅ Backend shows no dependencies
 - ✅ Status colors correct (green/gray/red)
 - ✅ "Essential" badges visible
 - ✅ "Depends on:" labels clear
@@ -651,7 +650,7 @@ pnpm package
 **TC-AUTO-006: Health Monitoring on App Launch**
 
 **Steps:**
-1. Close Kai Desktop
+1. Close AInTandem Desktop
 2. Relaunch app
 3. Check console logs
 
@@ -677,18 +676,6 @@ pnpm package
 - ✅ Health monitoring may still run
 - ✅ Re-enabling works
 
-**TC-AUTO-008: Dependency Handling**
-
-**Steps:**
-1. Stop Neo4j (Backend dependency)
-2. Let it auto-restart
-3. Verify Backend also restarts if it failed
-
-**Expected Result:**
-- ✅ Neo4j restarts first
-- ✅ Backend waits for Neo4j
-- ✅ Backend then restarts
-- ✅ Dependency order respected
 
 ### Test Group: Performance Optimization
 
@@ -918,7 +905,7 @@ pnpm package
 
 **Steps:**
 1. Verify Docker Desktop running
-2. Launch Kai Desktop
+2. Launch AInTandem Desktop
 3. Check runtime detection
 
 **Expected Result:**
@@ -1175,7 +1162,7 @@ After completing all test cases, calculate coverage:
 1. Verify Docker Desktop is running: `docker ps`
 2. Check Docker socket: `ls -la /var/run/docker.sock` (macOS/Linux)
 3. Restart Docker Desktop
-4. Restart Kai Desktop
+4. Restart AInTandem Desktop
 
 ### Issue: High CPU Usage
 

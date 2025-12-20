@@ -6,6 +6,10 @@
 .cospec-sync
 .kai-notify.json
 
+# AI Coder
+QWEN.md
+CLAUDE.md
+
 # Dependencies
 node_modules
 .pnpm-store

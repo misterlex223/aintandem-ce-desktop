@@ -9,20 +9,39 @@ import { getBundledRuntime } from './bundled-runtime'
  */
 export class ContainerManager {
   private runtime: IContainerRuntime | null = null
-  private preferredRuntime: 'docker' | 'containerd' | 'lima' | 'auto' = 'auto'
+  private preferredRuntime: 'docker' | 'containerd' | 'lima' | 'auto' = 'docker' // Default to Docker
 
   constructor(preferredRuntime?: 'docker' | 'containerd' | 'lima' | 'auto') {
-    this.preferredRuntime = preferredRuntime || 'auto'
+    // Check environment variable first, then constructor parameter, then default to 'docker'
+    this.preferredRuntime =
+      process.env.KAI_CONTAINER_RUNTIME as 'docker' | 'containerd' | 'lima' | 'auto' ||
+      preferredRuntime ||
+      'docker'
   }
 
   /**
    * Initialize container runtime with auto-detection
-   * Priority: Bundled runtime (Lima/containerd) → Docker Desktop (optional for developers)
+   * Priority: Docker Desktop (default) → Bundled runtime (Lima/containerd)
    */
   async initialize(): Promise<void> {
     console.log(`Initializing container runtime (preferred: ${this.preferredRuntime})...`)
 
-    // Try Lima first on macOS (default user mode)
+    // Try Docker Desktop as first priority (default)
+    if (this.preferredRuntime === 'docker' || this.preferredRuntime === 'auto') {
+      try {
+        const dockerAdapter = new DockerAdapter()
+        if (await dockerAdapter.isAvailable()) {
+          await dockerAdapter.initialize()
+          this.runtime = dockerAdapter
+          console.log('Using Docker Desktop runtime')
+          return
+        }
+      } catch (error) {
+        console.log('Docker Desktop not available:', error)
+      }
+    }
+
+    // Try Lima on macOS (user mode)
     if (process.platform === 'darwin' && (this.preferredRuntime === 'lima' || this.preferredRuntime === 'auto')) {
       console.log('[DEBUG] Trying Lima runtime on macOS...')
       try {
@@ -109,24 +128,9 @@ export class ContainerManager {
       }
     }
 
-    // Try Docker Desktop as fallback (optional developer mode)
-    if (this.preferredRuntime === 'docker' || this.preferredRuntime === 'auto') {
-      try {
-        const dockerAdapter = new DockerAdapter()
-        if (await dockerAdapter.isAvailable()) {
-          await dockerAdapter.initialize()
-          this.runtime = dockerAdapter
-          console.log('Using Docker Desktop runtime (developer mode)')
-          return
-        }
-      } catch (error) {
-        console.log('Docker Desktop not available:', error)
-      }
-    }
-
     throw new Error(
-      'No container runtime available. Kai will attempt to download and install a bundled runtime.\n\n' +
-      'If you prefer to use Docker Desktop (developer mode):\n' +
+      'No container runtime available.\n\n' +
+      'Please install Docker Desktop:\n' +
       'Docker Desktop: https://www.docker.com/products/docker-desktop'
     )
   }

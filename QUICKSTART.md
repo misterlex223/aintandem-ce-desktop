@@ -1,4 +1,4 @@
-# Kai Desktop - Quick Start Guide
+# AInTandem Desktop - Quick Start Guide
 
 ## Prerequisites
 
@@ -41,18 +41,17 @@ This will:
    - Click "Next" to continue
 
 2. **Base Directory Setup**
-   - Enter where you want Kai to store projects
-   - Example: `/Users/yourname/KaiBase`
+   - Enter where you want AInTandem to store projects
+   - Example: `/Users/yourname/AInTandem`
    - Click "Next"
 
 3. **Security Configuration**
-   - Set Neo4j password
    - Set Code Server password
    - Click "Next"
 
 4. **Cloud Frontend URL**
    - Enter your cloud-deployed frontend URL
-   - Example: `https://kai-frontend.example.com`
+   - Example: `https://aintandem-frontend.example.com`
    - Click "Finish"
 
 5. **Dashboard**
@@ -151,7 +150,7 @@ kai-desktop/
 1. Install Docker Desktop from https://www.docker.com/products/docker-desktop
 2. Start Docker Desktop
 3. Wait for it to fully start (green icon in system tray)
-4. Restart Kai Desktop
+4. Restart AInTandem Desktop
 
 ### Build fails with "electron not found"
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Phase 6 adds support for containerd as an alternative container runtime to Docker Desktop, enabling end-users to run Kai Desktop without requiring Docker Desktop installation.
+Phase 6 adds support for containerd as an alternative container runtime to Docker Desktop, enabling end-users to run AInTandem without requiring Docker Desktop installation.
 
 ## Features Implemented
 
@@ -118,7 +118,7 @@ window.kai.runtime.switch(type) // → new runtime type
 ### For Developers (Docker Desktop)
 
 1. Install Docker Desktop
-2. Run Kai Desktop - auto-detects Docker
+2. Run AInTandem Desktop - auto-detects Docker
 
 ### For End-Users (Containerd)
 

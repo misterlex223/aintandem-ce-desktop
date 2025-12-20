@@ -1,4 +1,4 @@
-# Platform Support for Kai Desktop
+# Platform Support for AInTandem Desktop
 
 ## Runtime Modes by Platform
 
@@ -86,7 +86,7 @@ The bundled runtime is available for all platforms:
 
 ## Runtime Priority Order
 
-Kai Desktop prioritizes bundled runtimes over Docker Desktop:
+AInTandem Desktop prioritizes bundled runtimes over Docker Desktop:
 
 1. **User Mode (Default)** - Bundled runtime (Lima on macOS, containerd on Linux/Windows)
 2. **Development Mode (Optional)** - Docker Desktop (for developers)
@@ -101,4 +101,4 @@ Docker Desktop is no longer prioritized because the bundled runtime is the defau
 | Linux    | ✅ nerdctl 2.1.6    | ✅ Docker Engine           |
 | Windows  | ✅ nerdctl 2.1.6    | ✅ Docker Desktop          |
 
-**Note**: Kai Desktop automatically detects available runtimes and defaults to User Mode (bundled runtime). Development Mode is optional for developers who prefer Docker Desktop.
+**Note**: AInTandem Desktop automatically detects available runtimes and defaults to User Mode (bundled runtime). Development Mode is optional for developers who prefer Docker Desktop.

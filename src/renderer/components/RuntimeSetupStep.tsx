@@ -88,7 +88,7 @@ export default function RuntimeSetupStep({ runtimeType, onComplete }: RuntimeSet
     <div style={styles.container}>
       <h2 style={styles.title}>Container Runtime Setup</h2>
       <p style={styles.subtitle}>
-        Kai Desktop needs to install {getRuntimeName()} to run containerized services.
+        AInTandem Desktop needs to install {getRuntimeName()} to run containerized services.
       </p>
 
       <div style={styles.statusCard}>

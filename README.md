@@ -1,10 +1,10 @@
-# Kai Desktop
+# AInTandem Desktop
 
-A desktop application for managing Docker containers and Kai services with a clean, modern interface.
+A desktop application for managing Docker containers and AInTandem services with a clean, modern interface.
 
 ## Features
 
-- **Service Management**: Start, stop, and monitor Kai services (Backend, Neo4j, Qdrant)
+- **Service Management**: Start, stop, and monitor AInTandem services (Backend)
 - **Container Management**: Full Docker/containerd container lifecycle management
 - **Health Monitoring**: Real-time service health tracking with dependency visualization
 - **Auto-Recovery**: Automatic restart of essential services on failure
@@ -27,7 +27,7 @@ A desktop application for managing Docker containers and Kai services with a cle
   - Automatic runtime detection
   - No additional installation required
 
-### Installing Kai Desktop
+### Installing AInTandem Desktop
 
 1. Download the latest release for your platform
 2. Install the application:
@@ -35,30 +35,30 @@ A desktop application for managing Docker containers and Kai services with a cle
    - **Windows**: Run the `.exe` installer
    - **Linux**: Install the `.AppImage` or `.deb` package
 
-3. Launch Kai Desktop from your Applications folder or Start menu
+3. Launch AInTandem Desktop from your Applications folder or Start menu
 
 ## Getting Started
 
 ### First Launch
 
-On first launch, Kai Desktop will:
+On first launch, AInTandem will:
 
 1. **Detect your container runtime** (Docker or containerd)
 2. **Initialize required infrastructure**:
-   - Create `kai-net` network
-   - Create required volumes (kai-neo4j-data, kai-qdrant-data)
+   - Create `aintandem-net` network
+   - Create required volumes (aintandem-data)
 3. **Load bundled images** (if using containerd)
 4. **Start health monitoring** for essential services
 
 ### Runtime Configuration
 
-Kai Desktop automatically detects and uses available container runtimes:
+AInTandem automatically detects and uses available container runtimes:
 
 - **Docker**: If Docker Desktop is running, it will be used by default
 - **Containerd**: Falls back to bundled containerd if Docker is not available
 - **Manual Selection**: Configure runtime in Settings (⚙️ button)
 
-## Using Kai Desktop
+## Using AInTandem
 
 ### Main Dashboard
 
@@ -130,7 +130,7 @@ Access detailed container logs:
 
 Quick access from your menu bar:
 
-1. **Kai Desktop icon** appears in system tray when app is running
+1. **AInTandem icon** appears in system tray when app is running
 2. **Right-click** (or click) to open menu:
    - Service status indicators
    - Quick Start/Stop actions
@@ -159,33 +159,23 @@ Configure application settings:
 
 These services are critical and will auto-restart on failure:
 
-- **Kai Backend**: Core API server (port 9900)
+- **AInTandem Backend**: Core API server (port 9900)
   - REST API for all operations
   - Container orchestration
   - Service management
 
-- **Neo4j**: Graph database (ports 7474, 7687)
-  - Context system graph storage
-  - Memory relationships
-  - Dependency tracking
-
-- **Qdrant**: Vector database (port 6333)
-  - Semantic search
-  - Vector embeddings
-  - Context retrieval
 
 ### Service Dependencies
 
 ```
-Backend ← depends on ← Neo4j
-Backend ← depends on ← Qdrant
+No service dependencies
 ```
 
 Services start in dependency order automatically.
 
 ## Auto-Recovery System
 
-Kai Desktop includes intelligent auto-restart capabilities:
+AInTandem Desktop includes intelligent auto-restart capabilities:
 
 ### How It Works
 
@@ -199,7 +189,7 @@ Kai Desktop includes intelligent auto-restart capabilities:
 
 ### What Gets Auto-Restarted
 
-- ✅ Essential services (Backend, Neo4j, Qdrant)
+- ✅ Essential services (Backend)
 - ❌ Optional services (manual restart required)
 - ❌ User-stopped services (respects manual actions)
 
@@ -208,12 +198,11 @@ Kai Desktop includes intelligent auto-restart capabilities:
 Check Console logs for auto-restart activity:
 ```
 Auto-restarting essential service: Kai Backend (attempt 1/3)
-Max restart attempts reached for Neo4j
 ```
 
 ## Performance Optimization
 
-Kai Desktop is optimized for minimal resource usage:
+AInTandem is optimized for minimal resource usage:
 
 - **Polling Intervals**: 10-second refresh rate (reduced from 5s)
 - **Health Monitoring**: 15-second checks (essential services only)
@@ -243,7 +232,7 @@ Kai Desktop is optimized for minimal resource usage:
 1. **If using Docker**:
    - Start Docker Desktop
    - Verify with `docker ps`
-   - Restart Kai Desktop
+   - Restart AInTandem
 2. **If using containerd**:
    - Check bundled binaries in app resources
    - Verify system permissions
@@ -345,28 +334,26 @@ Enable debug logging:
 1. Open Settings
 2. Enable "Debug Mode"
 3. Check console output for detailed logs
-4. Log file location: `~/Library/Logs/kai-desktop/` (macOS)
+4. Log file location: `~/Library/Logs/aintandem/` (macOS)
 
 ### Network Configuration
 
-Kai services use the `kai-net` Docker network:
+AInTandem services use the `aintandem-net` Docker network:
 
 - **Driver**: Bridge
 - **Attachable**: Yes
 - **Subnet**: Auto-assigned by Docker
-- **Services**: Backend, Neo4j, Qdrant
+- **Services**: Backend
 
 ### Volume Management
 
 Persistent data stored in Docker volumes:
 
-- `kai-neo4j-data`: Neo4j graph database
-- `kai-qdrant-data`: Qdrant vector storage
-- `kai-backend-config`: Backend configuration
+- `aintandem-data`: Backend data storage
 
 **Backup volumes**:
 ```bash
-docker run --rm -v kai-neo4j-data:/data -v $(pwd):/backup alpine tar czf /backup/neo4j-backup.tar.gz /data
+docker run --rm -v aintandem-data:/data -v $(pwd):/backup alpine tar czf /backup/aintandem-data-backup.tar.gz /data
 ```
 
 ## Support

@@ -1,3 +1,4 @@
+import { BrowserWindow, ipcMain } from 'electron'
 import { IContainerRuntime, ContainerInfo } from './container-runtime.interface'
 import { getConfigStoreSync } from '../config/config-store'
 import { getServiceDefinitions, getRequiredVolumes, getRequiredNetwork, ServiceDefinition } from './service-definitions'
@@ -17,6 +18,15 @@ export interface ServiceStatus {
 }
 
 /**
+ * Service event for UI communication
+ */
+export interface ServiceEvent {
+  serviceName: string
+  eventType: string
+  data: any
+}
+
+/**
  * Service Manager - Orchestrates Kai services
  */
 export class ServiceManager {
@@ -26,10 +36,125 @@ export class ServiceManager {
   private restartAttempts: Map<string, number> = new Map()
   private maxRestartAttempts: number = 3
   private healthCheckInterval: NodeJS.Timeout | null = null
+  private mainWindow: BrowserWindow | null = null
+  private registeredWindows: Set<BrowserWindow> = new Set()
 
   constructor(runtime: IContainerRuntime) {
     this.runtime = runtime
     this.services = getServiceDefinitions()
+  }
+
+  /**
+   * Set the main window reference to emit events to UI
+   */
+  setMainWindow(mainWindow: BrowserWindow): void {
+    this.mainWindow = mainWindow
+  }
+
+  /**
+   * Register a window to receive service events
+   */
+  registerWindow(window: BrowserWindow): void {
+    this.registeredWindows.add(window)
+  }
+
+  /**
+   * Unregister a window from receiving service events
+   */
+  unregisterWindow(window: BrowserWindow): void {
+    this.registeredWindows.delete(window)
+  }
+
+  /**
+   * Emit service events to be forwarded to the UI
+   */
+  private emitServiceEvent(serviceName: string, eventType: string, data: any): void {
+    // Send to main window if available
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send('service-event', {
+        serviceName,
+        eventType,
+        data
+      })
+    }
+
+    // Send to all registered windows
+    for (const window of this.registeredWindows) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('service-event', {
+          serviceName,
+          eventType,
+          data
+        })
+      }
+    }
+  }
+
+  /**
+   * Emit the current list of services to the UI
+   */
+  private emitServicesUpdate(): void {
+    // Send to main window if available
+    if (this.mainWindow) {
+      this.mainWindow.webContents.send('services-updated', this.getServicesStatus())
+    }
+
+    // Send to all registered windows
+    for (const window of this.registeredWindows) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('services-updated', this.getServicesStatus())
+      }
+    }
+  }
+
+  /**
+   * Request permission from user to download an image
+   */
+  private async requestImageDownloadPermission(imageName: string, serviceName: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      // Emit an event to ask the UI for permission
+      const requestId = `${serviceName}-${Date.now()}`
+
+      // Listen for the user's response
+      const listener = (event: import('electron').IpcMainEvent, responseId: string, allowed: boolean) => {
+        if (responseId === requestId) {
+          ipcMain.removeListener('image-download-permission-response', listener)
+          resolve(allowed)
+        }
+      }
+
+      ipcMain.on('image-download-permission-response', listener)
+
+      // Emit the permission request to the UI
+      // Send to main window if available
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('image-download-permission-request', {
+          id: requestId,
+          serviceName,
+          imageName,
+          size: 'unknown' // In a real implementation, we might want to fetch the actual image size
+        })
+      }
+
+      // Send to all registered windows
+      for (const window of this.registeredWindows) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('image-download-permission-request', {
+            id: requestId,
+            serviceName,
+            imageName,
+            size: 'unknown'
+          })
+        }
+      }
+
+      // Set a timeout to resolve with false if no response is received within 30 seconds
+      setTimeout(() => {
+        ipcMain.removeListener('image-download-permission-response', listener)
+        console.log(`Timeout waiting for permission to download ${imageName}`)
+        resolve(false)
+      }, 30000) // 30 second timeout
+    })
   }
 
   /**
@@ -147,9 +272,60 @@ export class ServiceManager {
       await this.runtime.removeContainer(status.containerId, true)
     }
 
+    // Get container configuration
+    const containerConfig = service.containerConfig(config)
+
+    // Check if image exists, and pull if not
+    const imageExists = await this.runtime.imageExists(containerConfig.image)
+    if (!imageExists) {
+      console.log(`Image ${containerConfig.image} not found, pulling...`)
+
+      // Request permission to download the image
+      const allowed = await this.requestImageDownloadPermission(containerConfig.image, serviceName)
+      if (!allowed) {
+        throw new Error(`User declined permission to download image ${containerConfig.image}`)
+      }
+
+      // Notify about image pulling start
+      this.emitServiceEvent(serviceName, 'image-pulling', {
+        message: `Pulling image ${containerConfig.image}`,
+        image: containerConfig.image,
+        progress: 0
+      })
+
+      try {
+        await this.runtime.pullImage(containerConfig.image, (progress) => {
+          console.log(`[Image Pull] ${containerConfig.image}: ${progress.status} (${progress.progress}%)`)
+
+          // Forward pulling progress to UI
+          this.emitServiceEvent(serviceName, 'image-pulling-progress', {
+            message: `Pulling image ${containerConfig.image}: ${progress.status}`,
+            image: containerConfig.image,
+            progress: progress.progress,
+            status: progress.status,
+            current: progress.current,
+            total: progress.total
+          })
+        })
+
+        console.log(`✓ Image ${containerConfig.image} pulled successfully`)
+        this.emitServiceEvent(serviceName, 'image-pulled', {
+          message: `Image ${containerConfig.image} pulled successfully`,
+          image: containerConfig.image
+        })
+      } catch (error) {
+        console.error(`Failed to pull image ${containerConfig.image}:`, error)
+        this.emitServiceEvent(serviceName, 'image-pull-error', {
+          message: `Failed to pull image ${containerConfig.image}: ${error}`,
+          image: containerConfig.image,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        throw new Error(`Failed to pull required image ${containerConfig.image}: ${error}`)
+      }
+    }
+
     // Start new container
     console.log(`Starting service: ${serviceName}`)
-    const containerConfig = service.containerConfig(config)
     await this.runtime.startContainer(containerConfig)
 
     // Wait for health check if applicable
@@ -195,6 +371,95 @@ export class ServiceManager {
         console.error(`Failed to start ${serviceName}:`, error)
         throw error
       }
+    }
+  }
+
+  /**
+   * Check if the flexy-sandbox image is available and download if needed
+   */
+  async checkAndDownloadFlexySandboxImage(): Promise<void> {
+    const imageName = 'ghcr.io/misterlex223/flexy-sandbox:latest';
+
+    console.log(`Checking for image: ${imageName}`);
+
+    // Check if the image already exists
+    const imageExists = await this.runtime.imageExists(imageName);
+
+    if (!imageExists) {
+      console.log(`Image ${imageName} not found, requesting permission to download...`);
+
+      // Request permission to download the image
+      const allowed = await this.requestImageDownloadPermission(imageName, 'flexy-sandbox');
+      if (!allowed) {
+        console.log(`User declined permission to download image ${imageName}`);
+        return;
+      }
+
+      // Notify about image pulling start
+      this.emitServiceEvent('flexy-sandbox', 'image-pulling', {
+        message: `Pulling image ${imageName}`,
+        image: imageName,
+        progress: 0
+      });
+
+      try {
+        // Track different phases of the pull process
+        const pullProgress = {
+          downloading: { progress: 0, status: 'Waiting' },
+          verifying: { progress: 0, status: 'Waiting' },
+          extracting: { progress: 0, status: 'Waiting' }
+        };
+
+        await this.runtime.pullImage(imageName, (progress) => {
+          console.log(`[Image Pull] ${imageName}: ${progress.status} (${progress.progress || 'N/A'}%)`);
+
+          // Determine the phase based on the progress status
+          let phase = 'downloading';
+          if (progress.status && typeof progress.status === 'string') {
+            if (progress.status.toLowerCase().includes('verifying')) {
+              phase = 'verifying';
+            } else if (progress.status.toLowerCase().includes('extracting')) {
+              phase = 'extracting';
+            } else if (progress.status.toLowerCase().includes('download') ||
+                      progress.status.toLowerCase().includes('pulling')) {
+              phase = 'downloading';
+            }
+          }
+
+          // Update progress for the specific phase
+          if (progress.progress !== undefined) {
+            pullProgress[phase as keyof typeof pullProgress].progress = progress.progress;
+          }
+          pullProgress[phase as keyof typeof pullProgress].status = progress.status;
+
+          // Forward pulling progress to UI with phase information
+          this.emitServiceEvent('flexy-sandbox', 'image-pulling-progress', {
+            message: `Pulling image ${imageName}: ${progress.status}`,
+            image: imageName,
+            progress: progress.progress,
+            status: progress.status,
+            current: progress.current,
+            total: progress.total,
+            phase: phase,
+            allPhases: pullProgress
+          });
+        });
+
+        console.log(`✓ Image ${imageName} pulled successfully`);
+        this.emitServiceEvent('flexy-sandbox', 'image-pulled', {
+          message: `Image ${imageName} pulled successfully`,
+          image: imageName
+        });
+      } catch (error) {
+        console.error(`Failed to pull image ${imageName}:`, error);
+        this.emitServiceEvent('flexy-sandbox', 'image-pull-error', {
+          message: `Failed to pull image ${imageName}: ${error}`,
+          image: imageName,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    } else {
+      console.log(`Image ${imageName} already exists`);
     }
   }
 
@@ -262,6 +527,25 @@ export class ServiceManager {
         error: error instanceof Error ? error.message : String(error),
         essential: service.essential || false
       }
+    }
+  }
+
+  /**
+   * Check if all essential services are running
+   */
+  async areAllEssentialServicesRunning(): Promise<boolean> {
+    try {
+      const services = await this.getServicesStatus();
+
+      // Check if all essential services are running
+      const allEssentialRunning = services.every(
+        (service) => !service.essential || service.status === 'running'
+      );
+
+      return allEssentialRunning;
+    } catch (error) {
+      console.error('Error checking essential services status:', error);
+      return false;
     }
   }
 
@@ -369,6 +653,31 @@ export class ServiceManager {
 
       try {
         const services = await this.getServicesStatus()
+
+        for (const service of services) {
+          // Check if essential service has stopped or is in error state
+          if (service.essential && (service.status === 'stopped' || service.status === 'error')) {
+            const attempts = this.restartAttempts.get(service.name) || 0
+
+            if (attempts < this.maxRestartAttempts) {
+              console.log(`Auto-restarting essential service: ${service.displayName} (attempt ${attempts + 1}/${this.maxRestartAttempts})`)
+              this.restartAttempts.set(service.name, attempts + 1)
+
+              try {
+                await this.startService(service.name)
+                // Reset attempts on successful start
+                this.restartAttempts.set(service.name, 0)
+              } catch (error) {
+                console.error(`Failed to auto-restart ${service.displayName}:`, error)
+              }
+            } else {
+              console.error(`Max restart attempts reached for ${service.displayName}`)
+            }
+          } else if (service.status === 'running') {
+            // Reset restart attempts for running services
+            this.restartAttempts.set(service.name, 0)
+          }
+        }
 
         for (const service of services) {
           // Check if essential service has stopped or is in error state

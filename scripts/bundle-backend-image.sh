@@ -2,13 +2,15 @@
 
 # Script to export backend Docker image for bundling with Electron app
 # This creates a tarball of the backend image that can be loaded on first launch
+# NOTE: This script is for bundled distribution. For remote image approach,
+# the app will pull ghcr.io/aintandem/kai-backend:latest automatically.
 
 set -e
 
 echo "Bundling Kai Backend Docker Image..."
 
 # Configuration
-IMAGE_NAME="kai-backend:latest"
+IMAGE_NAME="ghcr.io/aintandem/kai-backend:latest"
 OUTPUT_DIR="$(dirname "$0")/../resources"
 OUTPUT_FILE="$OUTPUT_DIR/kai-backend-image.tar.gz"
 

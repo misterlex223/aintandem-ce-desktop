@@ -8,46 +8,283 @@ import { getImageLoader } from './services/image-loader'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
+let dashboardWindow: BrowserWindow | null = null
+let aintandemWindowCount = 0;
+let isQuitting = false
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
+
+// Helper function to create a window with common configuration
+function createWindowBase(showDevTools: boolean = false, urlPath: string = ''): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 600,
+    height: 720,
+    minWidth: 600,
     minHeight: 600,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       nodeIntegration: false,
       contextIsolation: true
     },
-    title: 'Kai Desktop',
     show: false // Don't show until ready
-  })
+  });
 
   // Load the renderer
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173')
-    mainWindow.webContents.openDevTools()
+    let url = 'http://localhost:5173';
+    if (urlPath) {
+      url += urlPath;
+    }
+    window.loadURL(url);
+    if (showDevTools) {
+      window.webContents.openDevTools();
+    }
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    if (urlPath) {
+      window.loadFile(join(__dirname, '../renderer/index.html'), { hash: urlPath.substring(1) }); // Remove '#' from hash
+    } else {
+      window.loadFile(join(__dirname, '../renderer/index.html'));
+    }
   }
 
   // Show window when ready
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-  })
+  window.once('ready-to-show', () => {
+    window.show();
+  });
+
+  return window;
+}
+
+// Function to create the main application window
+function createWindow() {
+  mainWindow = createWindowBase(true); // Show dev tools for main window in dev
+  mainWindow.setTitle('AInTandem');
 
   mainWindow.on('closed', () => {
     mainWindow = null
   })
 
-  // Minimize to tray instead of closing (macOS/Windows)
+  // Minimize to tray instead of closing (Windows only, macOS follows system convention)
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting && (process.platform === 'darwin' || process.platform === 'win32')) {
+    if (!isQuitting && process.platform === 'win32') {
       event.preventDefault()
       mainWindow?.hide()
     }
+    // On macOS, the window close should follow system conventions
+    // The app stays running if there are background services, but can be quit via Cmd+Q or dock menu
   })
+}
+
+// Function to open or show the Dashboard window (single instance)
+function openDashboardWindow(onReady?: () => void) {
+  if (dashboardWindow) {
+    // If dashboard window exists, bring it to focus
+    if (dashboardWindow.isMinimized()) {
+      dashboardWindow.restore();
+    }
+    dashboardWindow.focus();
+
+    // Execute callback if provided
+    if (onReady) {
+      onReady();
+    }
+  } else {
+    // Create a new dashboard window
+    dashboardWindow = createWindowBase(false, '/#dashboard'); // Don't show dev tools, load dashboard route
+    dashboardWindow.setTitle('AInTandem - Dashboard');
+
+    // Execute callback when window is ready
+    dashboardWindow.webContents.once('dom-ready', () => {
+      if (onReady) {
+        onReady();
+      }
+    });
+
+    dashboardWindow.show(); // Show immediately for dashboard
+
+    // Register the dashboard window with the service manager to receive events
+    try {
+      const manager = getContainerManager();
+      const serviceManager = getServiceManager(manager.getRuntime());
+      serviceManager.registerWindow(dashboardWindow);
+
+      // Clean up when window is closed
+      dashboardWindow.on('closed', () => {
+        serviceManager.unregisterWindow(dashboardWindow!);
+        dashboardWindow = null; // Clear the reference when window is closed
+      });
+    } catch (error) {
+      console.error('Failed to register dashboard window with service manager:', error);
+      // Handle window closed even if registration fails
+      dashboardWindow.on('closed', () => {
+        dashboardWindow = null;
+      });
+    }
+  }
+}
+
+// Function to check if all essential services are running
+async function areAllEssentialServicesRunning(): Promise<boolean> {
+  try {
+    const manager = getContainerManager();
+    if (!manager.isInitialized()) {
+      return false;
+    }
+
+    const serviceManager = getServiceManager(manager.getRuntime());
+    const services = await serviceManager.getServicesStatus();
+
+    // Check if all essential services are running
+    const allEssentialRunning = services.every(
+      (service: any) => !service.essential || service.status === 'running'
+    );
+
+    return allEssentialRunning;
+  } catch (error) {
+    console.error('Error checking service status:', error);
+    return false;
+  }
+}
+
+// Function to open a new AInTandem window (multiple instances allowed)
+function openAInTandemWindow() {
+  const aintandemWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    },
+    title: `AInTandem Window ${++aintandemWindowCount}`,
+    show: true
+  });
+
+  // Load the AInTandem frontend
+  if (process.env.NODE_ENV === 'development') {
+    aintandemWindow.loadURL('http://localhost:9901');
+  } else {
+    // In production, load from local file or API endpoint as appropriate
+    aintandemWindow.loadURL('http://localhost:9901');
+  }
+
+  // Check for login page and perform automatic login if credentials are available
+  aintandemWindow.webContents.on('did-finish-load', async () => {
+    try {
+      // Get the current URL
+      const currentURL = aintandemWindow.webContents.getURL();
+
+      // Check if the URL contains /login
+      if (currentURL.includes('/login')) {
+        // Execute script to perform automatic login using only ID selectors
+        const loginScript = `
+          (function() {
+            // Wait for the page to fully load
+            setTimeout(async () => {
+              if (window.aintandemCredentials) {
+                try {
+                  const creds = await window.aintandemCredentials.getBackendCredentials();
+
+                  // Select fields using only their IDs
+                  const usernameField = document.querySelector('#username');
+                  const passwordField = document.querySelector('#password');
+
+                  if (usernameField && passwordField) {
+                    // Use native input value setter to properly update the field for frameworks like React
+                    const setNativeValue = Object.getOwnPropertyDescriptor(
+                      window.HTMLInputElement.prototype,
+                      'value'
+                    ).set;
+
+                    // Fill in the username using the native setter
+                    setNativeValue.call(usernameField, creds.username);
+                    usernameField.dispatchEvent(new Event('input', { bubbles: true }));
+                    usernameField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Fill in the password using keyboard events character by character
+                    // Clear the field first
+                    setNativeValue.call(passwordField, '');
+                    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+                    passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Type each character of the password individually
+                    const password = creds.password;
+                    for (let i = 0; i < password.length; i++) {
+                      const char = password[i];
+
+                      // Insert the character
+                      const start = passwordField.selectionStart || i;
+                      const end = passwordField.selectionEnd || i;
+                      const currentValue = passwordField.value;
+                      const newValue = currentValue.substring(0, start) + char + currentValue.substring(end);
+
+                      // Use the native setter to update the value
+                      setNativeValue.call(passwordField, newValue);
+
+                      // Update cursor position
+                      passwordField.setSelectionRange(start + 1, start + 1);
+
+                      // Dispatch input event for each character
+                      passwordField.dispatchEvent(new InputEvent('input', {
+                        inputType: 'insertText',
+                        data: char,
+                        bubbles: true,
+                        cancelable: true
+                      }));
+
+                      // Dispatch keyboard events
+                      passwordField.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+                      passwordField.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
+                      passwordField.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                    }
+
+                    // Final input and change events after typing is complete
+                    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+                    passwordField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    // Find and click the submit button
+                    const submitButton = document.querySelector('form button[type="submit"]');
+                    if (submitButton) {
+                      submitButton.click();
+                    }
+                    console.log('Auto login !!!');
+                  }
+                } catch (error) {
+                  console.error('Automatic login failed:', error);
+                }
+              }
+            }, 1500); // Wait 1.5 seconds for page to load
+          })();
+        `;
+
+        await aintandemWindow.webContents.executeJavaScript(loginScript);
+      }
+    } catch (error) {
+      console.error('Error during automatic login check:', error);
+    }
+  });
+
+  // Register the AInTandem window with the service manager to receive events
+  try {
+    const manager = getContainerManager();
+    const serviceManager = getServiceManager(manager.getRuntime());
+    serviceManager.registerWindow(aintandemWindow);
+
+    // Handle window closed
+    aintandemWindow.on('closed', () => {
+      serviceManager.unregisterWindow(aintandemWindow);
+      // Decrement the counter when window is closed
+      aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
+    });
+  } catch (error) {
+    console.error('Failed to register AInTandem window with service manager:', error);
+    // Handle window closed even if registration fails
+    aintandemWindow.on('closed', () => {
+      // Decrement the counter when window is closed
+      aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
+    });
+  }
+
+  return aintandemWindow;
 }
 
 // System tray setup
@@ -58,7 +295,7 @@ function createTray() {
   )
 
   tray = new Tray(icon)
-  tray.setToolTip('Kai Desktop')
+  tray.setToolTip('AInTandem')
 
   updateTrayMenu()
 
@@ -83,12 +320,12 @@ async function updateTrayMenu() {
     if (!manager.isInitialized()) {
       // Show minimal menu when not initialized
       const contextMenu = Menu.buildFromTemplate([
-        { label: 'Kai Desktop', type: 'normal', enabled: false },
+        { label: 'AInTandem', type: 'normal', enabled: false },
         { type: 'separator' },
         { label: 'Container runtime not ready', type: 'normal', enabled: false },
         { type: 'separator' },
         { label: 'Show Window', click: () => mainWindow?.show() },
-        { label: 'Quit', click: () => { app.isQuitting = true; app.quit() } }
+        { label: 'Quit', click: () => { isQuitting = true; app.quit() } }
       ])
       tray.setContextMenu(contextMenu)
       return
@@ -102,7 +339,7 @@ async function updateTrayMenu() {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: 'Kai Desktop',
+        label: 'AInTandem',
         type: 'normal',
         enabled: false
       },
@@ -160,7 +397,7 @@ async function updateTrayMenu() {
         label: 'Quit',
         type: 'normal',
         click: () => {
-          app.isQuitting = true
+          isQuitting = true
           app.quit()
         }
       }
@@ -232,7 +469,12 @@ function setupAutoUpdater() {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  console.log('Kai Desktop starting...')
+  // Set app name for development mode
+  if (process.env.NODE_ENV === 'development') {
+    app.setName('AInTandem Dev');
+  }
+
+  console.log('AInTandem starting...')
 
   try {
     // Initialize config store first
@@ -262,8 +504,6 @@ app.whenReady().then(async () => {
     // Still create window to show error to user
   }
 
-  createWindow()
-
   // Setup system tray
   createTray()
 
@@ -277,31 +517,287 @@ app.whenReady().then(async () => {
   try {
     const manager = getContainerManager()
     const serviceManager = getServiceManager(manager.getRuntime())
+    serviceManager.setMainWindow(mainWindow) // Set main window for event emission
     serviceManager.startHealthMonitoring()
   } catch (error) {
     console.error('Failed to start health monitoring:', error)
   }
 
+  // Determine which window to open based on service status
+  try {
+    const allServicesRunning = await areAllEssentialServicesRunning();
+    if (allServicesRunning) {
+      // If all services are running, open AInTandem window
+      openAInTandemWindow();
+    } else {
+      // If not all services are running, open Dashboard window
+      openDashboardWindow();
+    }
+  } catch (error) {
+    console.error('Error determining service status, defaulting to Dashboard:', error);
+    // If there's an error checking service status, default to opening Dashboard
+    openDashboardWindow();
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      // When all windows are closed and app is activated again,
+      // determine which window to reopen based on service status
+      areAllEssentialServicesRunning()
+        .then(allServicesRunning => {
+          if (allServicesRunning) {
+            openAInTandemWindow();
+          } else {
+            openDashboardWindow();
+          }
+        })
+        .catch(err => {
+          console.error('Error on app activation:', err);
+          openDashboardWindow();
+        });
     }
   })
+
+  // Handle macOS quit command (Cmd+Q) and ensure proper cleanup
+  app.on('before-quit', () => {
+    isQuitting = true;
+  })
+
+  // Register global shortcuts
+  app.on('browser-window-focus', () => {
+    // When a window gains focus, we could potentially register shortcuts
+    // but Electron doesn't allow dynamic global shortcut registration
+  });
+
+  // Create application menu
+  const menuTemplate: import('electron').MenuItemConstructorOptions[] = [
+    // { app.name } menu (macOS only)
+    ...(process.platform === 'darwin' ? [{
+      label: app.name,
+      submenu: [
+        {
+          label: 'About AInTandem Desktop',
+          click: () => {
+            // If dashboard window exists, bring it to front and send event
+            if (dashboardWindow) {
+              if (dashboardWindow.isMinimized()) {
+                dashboardWindow.restore();
+              }
+              dashboardWindow.show();
+              dashboardWindow.focus();
+              dashboardWindow.webContents.send('show-about-dialog');
+            }
+            // If dashboard window doesn't exist, create it and send event when ready
+            else {
+              openDashboardWindow(() => {
+                // This callback is executed when the dashboard window is ready
+                if (dashboardWindow) {
+                  dashboardWindow.webContents.send('show-about-dialog');
+                } else if (mainWindow) {
+                  // Fallback to main window if dashboard creation fails
+                  if (mainWindow.isMinimized()) {
+                    mainWindow.restore();
+                  }
+                  mainWindow.show();
+                  mainWindow.focus();
+                  mainWindow.webContents.send('show-about-dialog');
+                }
+              });
+            }
+          }
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        {
+          label: 'Quit',
+          accelerator: 'Cmd+Q',
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          }
+        }
+      ]
+    }] : []),
+
+    // File menu
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Dashboard',
+          accelerator: 'CmdOrCtrl+D',
+          click: () => {
+            openDashboardWindow();
+          }
+        },
+        {
+          label: 'Open AInTandem Window',
+          accelerator: 'CmdOrCtrl+A',
+          click: () => {
+            openAInTandemWindow();
+          }
+        },
+        ...(process.platform !== 'darwin' ? [
+          { type: 'separator' },
+          {
+            label: 'Quit',
+            accelerator: 'Alt+F4',
+            click: () => {
+              isQuitting = true;
+              app.quit();
+            }
+          }
+        ] : [])
+      ]
+    },
+
+    // Edit menu
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(process.platform === 'darwin' ? [
+          { role: 'pasteAndMatchStyle' },
+          { role: 'delete' },
+          { role: 'selectAll' },
+          { type: 'separator' },
+          {
+            label: 'Speech',
+            submenu: [
+              { role: 'startSpeaking' },
+              { role: 'stopSpeaking' }
+            ]
+          }
+        ] : [
+          { role: 'delete' },
+          { type: 'separator' },
+          { role: 'selectAll' }
+        ])
+      ]
+    },
+
+    // View menu
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+
+    // Window menu
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        {
+          label: 'Close Window',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow();
+            if (focusedWindow && !focusedWindow.isDestroyed()) {
+              // For the main window, follow the existing behavior (hide instead of close on macOS/Windows)
+              if (focusedWindow === mainWindow) {
+                if (process.platform === 'darwin') {
+                  focusedWindow.hide(); // On macOS, hide main window instead of closing
+                } else {
+                  focusedWindow.hide(); // On Windows, hide to tray as per existing behavior
+                }
+              } else {
+                // For other windows (dashboard, AInTandem), close normally
+                focusedWindow.close();
+              }
+            }
+          }
+        },
+        ...(process.platform === 'darwin' ? [
+          { type: 'separator' },
+          { role: 'front' },
+          { type: 'separator' },
+          { role: 'window' }
+        ] : [
+          // On non-macOS, the close functionality is handled by the menu item above
+        ])
+      ]
+    },
+
+    // Help menu
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About AInTandem Desktop',
+          click: () => {
+            // If dashboard window exists, bring it to front and send event
+            if (dashboardWindow) {
+              if (dashboardWindow.isMinimized()) {
+                dashboardWindow.restore();
+              }
+              dashboardWindow.show();
+              dashboardWindow.focus();
+              dashboardWindow.webContents.send('show-about-dialog');
+            }
+            // If dashboard window doesn't exist, create it and send event when ready
+            else {
+              openDashboardWindow(() => {
+                // This callback is executed when the dashboard window is ready
+                if (dashboardWindow) {
+                  dashboardWindow.webContents.send('show-about-dialog');
+                } else if (mainWindow) {
+                  // Fallback to main window if dashboard creation fails
+                  if (mainWindow.isMinimized()) {
+                    mainWindow.restore();
+                  }
+                  mainWindow.show();
+                  mainWindow.focus();
+                  mainWindow.webContents.send('show-about-dialog');
+                }
+              });
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Learn More',
+          click: async () => {
+            const { shell } = require('electron');
+            await shell.openExternal('https://github.com/aintandem/kai-desktop');
+          }
+        }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(menuTemplate);
+  Menu.setApplicationMenu(menu);
 })
 
 app.on('window-all-closed', () => {
-  // Don't quit on window close if tray is active (except on Linux)
-  if (process.platform !== 'darwin' && process.platform !== 'win32') {
+  // On macOS, don't quit the app when windows are closed to follow system conventions
+  // The app should only quit when the user explicitly chooses "Quit" from the menu
+  if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// Declare isQuitting flag
-declare module 'electron' {
-  interface App {
-    isQuitting?: boolean
-  }
-}
 
 // IPC Handlers
 
@@ -634,6 +1130,59 @@ ipcMain.handle('service:stopAll', async () => {
   return serviceManager.stopAll()
 })
 
+// Check and download flexy-sandbox image if needed
+ipcMain.handle('service:checkAndDownloadFlexySandboxImage', async () => {
+  const manager = getContainerManager()
+  const serviceManager = getServiceManager(manager.getRuntime())
+  return serviceManager.checkAndDownloadFlexySandboxImage()
+})
+
+// Handle image download permission response
+ipcMain.on('image-download-permission-response', (event, responseId, allowed) => {
+  // Forward the response back to the service manager
+  // The service manager has its own listener for this event
+  console.log(`Permission response for ${responseId}: ${allowed}`)
+})
+
+// Listen for permission requests from the service manager and forward to renderer
+// This is handled by the service manager's requestImageDownloadPermission method
+
+// Open AInTandem window in new BrowserWindow
+ipcMain.handle('open-aintandem-window', async () => {
+  openAInTandemWindow();
+  return { success: true };
+});
+
+// Open Dashboard window (single instance)
+ipcMain.handle('open-dashboard-window', async () => {
+  openDashboardWindow();
+  return { success: true };
+});
+
+// Get app information
+ipcMain.handle('app:getInfo', async () => {
+  // Get package.json information
+  const packagePath = join(app.getAppPath(), 'package.json');
+  let packageInfo = {};
+
+  try {
+    const fs = require('fs');
+    packageInfo = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+  } catch (error) {
+    console.error('Failed to read package.json:', error);
+  }
+
+  return {
+    name: packageInfo['productName'] || app.getName(),
+    version: app.getVersion(),
+    description: packageInfo['description'] || 'AInTandem Desktop',
+    author: packageInfo['author'] || 'AInTandem Team',
+    license: packageInfo['license'] || 'AGPLv3',
+    homepage: packageInfo['homepage'] || packageInfo['repository']?.['url'] || 'https://github.com/aintandem/kai-desktop',
+    repository: packageInfo['repository']?.['url'] || 'https://github.com/aintandem/kai-desktop'
+  };
+})
+
 // Auto-updater Management
 ipcMain.handle('update:check', async () => {
   if (process.env.NODE_ENV === 'development') {
@@ -670,3 +1219,4 @@ ipcMain.handle('update:install', async () => {
 })
 
 console.log('IPC handlers registered')
+

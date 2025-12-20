@@ -2,7 +2,7 @@
 
 ## Overview
 
-Lima (Linux virtual machines) provides native containerd/nerdctl support on macOS, making it the perfect solution for Kai Desktop's "User Mode" on macOS.
+Lima (Linux virtual machines) provides native containerd/nerdctl support on macOS, making it the perfect solution for AInTandem Desktop's "User Mode" on macOS.
 
 ## Why Lima?
 

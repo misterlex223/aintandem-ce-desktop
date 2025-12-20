@@ -21,6 +21,7 @@ export default defineConfig({
     }
   },
   renderer: {
+    plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer'),

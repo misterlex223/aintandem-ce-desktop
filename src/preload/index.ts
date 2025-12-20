@@ -128,7 +128,34 @@ const api = {
     stop: (serviceName: string) => ipcRenderer.invoke('service:stop', serviceName) as Promise<void>,
     restart: (serviceName: string) => ipcRenderer.invoke('service:restart', serviceName) as Promise<void>,
     startAll: () => ipcRenderer.invoke('service:startAll') as Promise<void>,
-    stopAll: () => ipcRenderer.invoke('service:stopAll') as Promise<void>
+    stopAll: () => ipcRenderer.invoke('service:stopAll') as Promise<void>,
+    checkAndDownloadFlexySandboxImage: () => ipcRenderer.invoke('service:checkAndDownloadFlexySandboxImage') as Promise<void>
+  },
+
+  // Service events
+  'service-events': {
+    onServiceEvent: (callback: (event: { serviceName: string; eventType: string; data: any }) => void) => {
+      const listener = (_event: any, event: { serviceName: string; eventType: string; data: any }) => callback(event)
+      ipcRenderer.on('service-event', listener)
+      return () => ipcRenderer.removeListener('service-event', listener)
+    },
+    onServicesUpdated: (callback: (services: any[]) => void) => {
+      const listener = (_event: any, services: any[]) => callback(services)
+      ipcRenderer.on('services-updated', listener)
+      return () => ipcRenderer.removeListener('services-updated', listener)
+    }
+  },
+
+  // Image download permission
+  'image-download-permission': {
+    onRequest: (callback: (request: { id: string; serviceName: string; imageName: string; size: string }) => void) => {
+      const listener = (_event: any, request: { id: string; serviceName: string; imageName: string; size: string }) => callback(request)
+      ipcRenderer.on('image-download-permission-request', listener)
+      return () => ipcRenderer.removeListener('image-download-permission-request', listener)
+    },
+    respond: (requestId: string, allowed: boolean) => {
+      ipcRenderer.send('image-download-permission-response', requestId, allowed)
+    }
   },
 
   // Auto-updater operations
@@ -166,11 +193,88 @@ const api = {
       ipcRenderer.on('update:downloaded', listener)
       return () => ipcRenderer.removeListener('update:downloaded', listener)
     }
+  },
+
+  // Window operations
+  openAInTandemWindow: () => ipcRenderer.invoke('open-aintandem-window') as Promise<void>,
+  openDashboardWindow: () => ipcRenderer.invoke('open-dashboard-window') as Promise<void>,
+
+  // App information
+  app: {
+    getInfo: () => ipcRenderer.invoke('app:getInfo') as Promise<{
+      name: string;
+      version: string;
+      description: string;
+      author: string;
+      license: string;
+      homepage: string;
+      repository: string;
+    }>
+  },
+
+  // About dialog
+  'about-dialog': {
+    onShow: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('show-about-dialog', listener);
+      return () => ipcRenderer.removeListener('show-about-dialog', listener);
+    }
   }
 }
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('kai', api)
+
+// Expose limited Node.js functionality for renderer (only if needed)
+// NOTE: Exposing Node.js APIs to renderer can be a security risk
+// Only expose what is absolutely necessary
+// Check if we're in an environment where Node.js modules are available
+if (typeof require !== 'undefined' && typeof process !== 'undefined') {
+  try {
+    const path = require('path');
+    contextBridge.exposeInMainWorld('nodePath', {
+      join: (...args: string[]) => path.join(...args),
+      resolve: (...args: string[]) => path.resolve(...args),
+      dirname: (pathStr: string) => path.dirname(pathStr),
+      basename: (pathStr: string) => path.basename(pathStr),
+      extname: (pathStr: string) => path.extname(pathStr)
+    });
+  } catch (error) {
+    console.warn('Could not expose Node.js path module to renderer:', error);
+  }
+} else {
+  console.debug('Node.js modules not available in this context, skipping path module exposure');
+}
+
+// Expose backend credentials for automatic login
+contextBridge.exposeInMainWorld('aintandemCredentials', {
+  getBackendCredentials: async () => {
+    const DEFAULT_USERNAME = 'admin';
+    const DEFAULT_PASSWORD = 'aintandem';
+
+    if (window.kai) {
+      try {
+        const config = await window.kai.config.get();
+        return {
+          username: config.services.backend.username || DEFAULT_USERNAME,
+          password: config.services.backend.password || DEFAULT_PASSWORD
+        };
+      } catch (error) {
+        console.error('Could not retrieve backend credentials:', error);
+        return {
+          username: DEFAULT_USERNAME,
+          password: DEFAULT_PASSWORD
+        };
+      }
+    } else {
+      console.warn('window.kai not available, returning default credentials');
+      return {
+          username: DEFAULT_USERNAME,
+          password: DEFAULT_PASSWORD
+      };
+    }
+  }
+});
 
 // Export types for TypeScript support
 export type KaiAPI = typeof api

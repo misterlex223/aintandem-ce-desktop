@@ -19,15 +19,41 @@ export interface ServiceDefinition {
  */
 export function getServiceDefinitions(): Record<string, ServiceDefinition> {
   return {
+    frontend: {
+      name: 'frontend',
+      displayName: 'Frontend',
+      description: 'Kai frontend web interface',
+      essential: false,
+      dependsOn: ['backend'], // Frontend depends on backend
+      containerConfig: (config: KaiConfig) => ({
+        name: 'kai-frontend',
+        image: 'ghcr.io/aintandem/kai-frontend:latest',
+        env: {
+          BACKEND_URL: `http://kai-backend:${config.services.backend.port}`,
+          NODE_ENV: config.services.backend.nodeEnv
+        },
+        ports: {
+          '80': '9901'  // Map host port 9901 to container port 80
+        },
+        networks: [config.env.dockerNetwork],
+        restart: 'unless-stopped',
+        healthcheck: {
+          test: ['CMD', 'wget', '-q', '--spider', 'http://localhost'], // Check internal container port
+          interval: 15000,
+          timeout: 5000,
+          retries: 3,
+          startPeriod: 10000
+        }
+      })
+    },
     backend: {
       name: 'backend',
       displayName: 'Backend',
       description: 'Kai backend API server',
       essential: true,
-      dependsOn: ['qdrant', 'neo4j'],
       containerConfig: (config: KaiConfig) => ({
         name: 'kai-backend',
-        image: 'kai-backend:latest',
+        image: 'ghcr.io/aintandem/kai-backend:latest',
         env: {
           NODE_ENV: config.services.backend.nodeEnv,
           PORT: config.services.backend.port.toString(),
@@ -40,15 +66,13 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
           AI_SESSION_MODE: config.env.aiSessionMode,
           TASK_COMPLETION_TIMEOUT: config.env.taskCompletionTimeout.toString(),
           CONTEXT_ENABLED: config.env.contextEnabled.toString(),
-          QDRANT_URL: 'http://kai-qdrant:6333',
-          NEO4J_URI: 'bolt://kai-neo4j:7687',
-          NEO4J_USER: 'neo4j',
-          NEO4J_PASSWORD: config.services.neo4j.password,
           EMBEDDING_PROVIDER: config.env.embeddingProvider,
           EMBEDDING_MODEL: config.env.embeddingModel,
           EMBEDDING_DIMENSIONS: config.env.embeddingDimensions.toString(),
           AUTO_CAPTURE_ENABLED: config.env.autoCaptureEnabled.toString(),
-          EXTRACT_FACTS_ENABLED: config.env.extractFactsEnabled.toString()
+          EXTRACT_FACTS_ENABLED: config.env.extractFactsEnabled.toString(),
+          AUTH_USERNAME: config.services.backend.username || 'admin',
+          AUTH_PASSWORD: config.services.backend.password || 'aintandem'
         },
         ports: {
           [config.services.backend.port.toString()]: config.services.backend.port.toString()
@@ -59,7 +83,7 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
             container: '/var/run/docker.sock'
           },
           {
-            host: 'kai-data',
+            host: 'aintandem-data',
             container: '/app/data'
           },
           {
@@ -70,7 +94,7 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
         networks: [config.env.dockerNetwork],
         restart: 'unless-stopped',
         healthcheck: {
-          test: ['CMD', 'wget', '-q', '--spider', `http://localhost:${config.services.backend.port}/api/health`],
+          test: ['CMD', 'wget', '-q', '--spider', `http://localhost:9900/api/health`],
           interval: 15000,
           timeout: 5000,
           retries: 3,
@@ -86,7 +110,7 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
       essential: false,
       containerConfig: (config: KaiConfig) => ({
         name: 'kai-code-server',
-        image: 'codercom/code-server:latest',
+        image: 'ghcr.io/aintandem/code-server:latest',
         command: ['--bind-addr', '0.0.0.0:8080'],
         env: {
           PASSWORD: config.services.codeServer.password,
@@ -116,93 +140,23 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
         ],
         networks: [config.env.dockerNetwork],
         restart: 'unless-stopped'
-      })
-    },
-
-    qdrant: {
-      name: 'qdrant',
-      displayName: 'Qdrant',
-      description: 'Vector database for context system',
-      essential: true,
-      containerConfig: (config: KaiConfig) => ({
-        name: 'kai-qdrant',
-        image: 'qdrant/qdrant:latest',
-        ports: {
-          '6333': config.services.qdrant.port.toString(),
-          '6334': '6334'
-        },
-        volumes: [
-          {
-            host: 'qdrant-data',
-            container: '/qdrant/storage'
-          }
-        ],
-        networks: [config.env.dockerNetwork],
-        restart: 'unless-stopped',
-        healthcheck: {
-          test: ['CMD', 'curl', '-f', 'http://localhost:6333/'],
-          interval: 10000,
-          timeout: 5000,
-          retries: 3,
-          startPeriod: 10000
-        }
-      })
-    },
-
-    neo4j: {
-      name: 'neo4j',
-      displayName: 'Neo4j',
-      description: 'Graph database for context system',
-      essential: true,
-      containerConfig: (config: KaiConfig) => ({
-        name: 'kai-neo4j',
-        image: 'neo4j:5-community',
-        env: {
-          NEO4J_AUTH: `neo4j/${config.services.neo4j.password}`,
-          'NEO4J_PLUGINS': '["apoc"]',
-          'NEO4J_dbms_security_procedures_unrestricted': 'apoc.*',
-          'NEO4J_dbms_security_procedures_allowlist': 'apoc.*'
-        },
-        ports: {
-          '7474': '7474',
-          '7687': config.services.neo4j.port.toString()
-        },
-        volumes: [
-          {
-            host: 'neo4j-data',
-            container: '/data'
-          },
-          {
-            host: 'neo4j-logs',
-            container: '/logs'
-          }
-        ],
-        networks: [config.env.dockerNetwork],
-        restart: 'unless-stopped',
-        healthcheck: {
-          test: ['CMD', 'cypher-shell', '-u', 'neo4j', '-p', config.services.neo4j.password, 'RETURN 1'],
-          interval: 10000,
-          timeout: 5000,
-          retries: 5,
-          startPeriod: 30000
-        }
-      })
+      })    
     }
   }
 }
 
 /**
- * Get required volumes for Kai services
+ * Get required volumes for AInTandem services
  */
 export function getRequiredVolumes(): string[] {
-  return ['kai-data', 'qdrant-data', 'neo4j-data', 'neo4j-logs']
+  return ['aintandem-data']
 }
 
 /**
  * Get required network name
  */
 export function getRequiredNetwork(): string {
-  return 'kai-net'
+  return 'aintandem-net'
 }
 
 /**

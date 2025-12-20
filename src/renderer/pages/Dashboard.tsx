@@ -133,8 +133,8 @@ export default function Dashboard() {
 
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Kai Desktop</h1>
-          <p style={styles.subtitle}>Container Management Dashboard</p>
+          <h1 style={styles.title}>AInTandem Desktop</h1>
+          <p style={styles.subtitle}>Sandbox Management Dashboard</p>
         </div>
         <button style={styles.settingsButton} onClick={() => setShowSettings(true)}>
           ⚙️ Settings

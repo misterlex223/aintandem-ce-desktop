@@ -1,7 +1,7 @@
 {
-  "name": "kai-desktop",
-  "version": "1.0.0",
-  "description": "Kai Desktop - Standalone container management application",
+  "name": "aintandem-desktop",
+  "version": "0.5.0",
+  "description": "AInTandem Desktop — Your local AI sandbox for safe, collaborative building",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -25,8 +25,8 @@
     "containers",
     "kai"
   ],
-  "author": "Kai Team",
-  "license": "MIT",
+  "author": "AInTandem",
+  "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.15.1",
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -57,8 +57,8 @@
     "electron-updater": "^6.6.2"
   },
   "build": {
-    "appId": "com.kai.desktop",
-    "productName": "Kai Desktop",
+    "appId": "org.aintandem-desktop",
+    "productName": "AInTandem Desktop",
     "directories": {
       "buildResources": "build",
       "output": "dist"

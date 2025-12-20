@@ -79,7 +79,7 @@ export default function RuntimeModeSelector({
         <h2 style={styles.title}>Choose Container Runtime Mode</h2>
 
         <p style={styles.subtitle}>
-          Kai Desktop uses a bundled container runtime by default (no dependencies required).
+          AInTandem Desktop uses a bundled container runtime by default (no dependencies required).
           Developers can optionally use Docker Desktop if already installed.
         </p>
 

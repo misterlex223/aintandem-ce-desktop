@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import LogViewerModal from './LogViewerModal'
+import ImageDownloadPermissionModal from './ImageDownloadPermissionModal'
 
 interface ServiceStatus {
   name: string
@@ -23,7 +24,9 @@ interface ContainerStats {
 
 export default function ServicesTab() {
   const [services, setServices] = useState<ServiceStatus[]>([])
+  const [serviceEvents, setServiceEvents] = useState<Record<string, any>>({})
   const [stats, setStats] = useState<Record<string, ContainerStats>>({})
+  const [generalImageEvents, setGeneralImageEvents] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [operating, setOperating] = useState<string | null>(null)
   const [showLogs, setShowLogs] = useState<{ containerId: string; containerName: string } | null>(null)
@@ -32,7 +35,77 @@ export default function ServicesTab() {
     loadServices()
     // Refresh every 10 seconds (optimized from 5s)
     const interval = setInterval(loadServices, 10000)
-    return () => clearInterval(interval)
+
+    // Set up event listener for individual service events (like image pulling)
+    const unlistenServiceEvent = window.kai['service-events'].onServiceEvent((event) => {
+      // For known services, store in serviceEvents
+      if (services.some(service => service.name === event.serviceName)) {
+        setServiceEvents(prev => ({
+          ...prev,
+          [event.serviceName]: event
+        }))
+
+        // Clear the event after some time if it's a completion event
+        if (event.eventType === 'image-pulled') {
+          setTimeout(() => {
+            setServiceEvents(current => {
+              const newState = { ...current };
+              delete newState[event.serviceName];
+              return newState;
+            });
+          }, 2000);
+        }
+      } else {
+        // For non-service events (like flexy-sandbox), store in generalImageEvents
+        setGeneralImageEvents(prev => ({
+          ...prev,
+          [event.serviceName]: event
+        }))
+
+        // Clear the event after some time if it's a completion event
+        if (event.eventType === 'image-pulled') {
+          setTimeout(() => {
+            setGeneralImageEvents(current => {
+              const newState = { ...current };
+              delete newState[event.serviceName];
+              return newState;
+            });
+          }, 2000);
+        }
+      }
+    })
+
+    // Set up event listener for bulk service status updates
+    const unlistenServicesUpdated = window.kai['service-events'].onServicesUpdated((updatedServices) => {
+      setServices(updatedServices)
+    });
+
+    // Check for flexy-sandbox image when component mounts and after a delay to ensure services are loaded
+    const checkImageOnMount = setTimeout(async () => {
+      try {
+        // Load services again to make sure we have current status
+        await loadServices();
+
+        // Check if all essential services are running before checking the image
+        const allServices = await window.kai.service.getAll();
+        const allEssentialRunning = allServices.every(
+          (service: any) => !service.essential || service.status === 'running'
+        );
+
+        if (allEssentialRunning) {
+          await window.kai.service.checkAndDownloadFlexySandboxImage();
+        }
+      } catch (error) {
+        console.error('Error checking flexy-sandbox image on mount:', error);
+      }
+    }, 2000); // Delay to ensure services are loaded
+
+    return () => {
+      clearInterval(interval)
+      unlistenServiceEvent()
+      unlistenServicesUpdated()
+      clearTimeout(checkImageOnMount); // Clean up the timeout on unmount
+    }
   }, [])
 
   const loadServices = async () => {
@@ -116,6 +189,15 @@ export default function ServicesTab() {
     try {
       await window.kai.service.startAll()
       await loadServices()
+
+      // After all services have started, check for the flexy-sandbox image
+      setTimeout(async () => {
+        try {
+          await window.kai.service.checkAndDownloadFlexySandboxImage();
+        } catch (error) {
+          console.error('Error checking flexy-sandbox image:', error)
+        }
+      }, 3000) // Delay to allow services to fully start
     } catch (error) {
       alert(`Failed to start all services: ${error}`)
     } finally {
@@ -165,6 +247,21 @@ export default function ServicesTab() {
     }
   }
 
+  const isImagePulling = (serviceName: string) => {
+    const event = serviceEvents[serviceName];
+    return event && (
+      event.eventType === 'image-pulling' ||
+      event.eventType === 'image-pulling-progress'
+    );
+  };
+
+  const getImagePullProgress = (serviceName: string) => {
+    const event = serviceEvents[serviceName];
+    return isImagePulling(serviceName) && event.eventType === 'image-pulling-progress'
+      ? event.data
+      : null;
+  };
+
   if (loading) {
     return <div style={styles.loading}>Loading services...</div>
   }
@@ -191,6 +288,77 @@ export default function ServicesTab() {
         </div>
       </div>
 
+      {/* General image download progress (for non-service images like flexy-sandbox) */}
+      {Object.entries(generalImageEvents).map(([serviceName, event]) => {
+        if (event.eventType === 'image-pulling' || event.eventType === 'image-pulling-progress') {
+          // If we have detailed phase information, show separate progress bars for each phase
+          if (event.data?.allPhases) {
+            const { downloading, extracting } = event.data.allPhases;
+
+            return (
+              <div key={`general-${serviceName}`} style={styles.imagePullingSection}>
+                <div style={styles.imagePullingText}>
+                  {event.data?.message || `Pulling image for ${serviceName}...`}
+                </div>
+
+                {/* Downloading Phase */}
+                <div style={styles.phaseContainer}>
+                  <div style={styles.phaseLabel}>Downloading:</div>
+                  <div style={styles.imagePullProgressBar}>
+                    <div
+                      style={{
+                        ...styles.imagePullProgressFill,
+                        width: `${downloading.progress}%`,
+                        background: '#4caf50'
+                      }}
+                    />
+                  </div>
+                  <div style={styles.phaseProgress}>{downloading.progress}% - {downloading.status}</div>
+                </div>
+
+                {/* Extracting Phase */}
+                <div style={styles.phaseContainer}>
+                  <div style={styles.phaseLabel}>Extracting:</div>
+                  <div style={styles.imagePullProgressBar}>
+                    <div
+                      style={{
+                        ...styles.imagePullProgressFill,
+                        width: `${extracting.progress}%`,
+                        background: '#ff9800'
+                      }}
+                    />
+                  </div>
+                  <div style={styles.phaseProgress}>{extracting.progress}% - {extracting.status}</div>
+                </div>
+              </div>
+            );
+          } else {
+            // Fallback to single progress bar if no phase info
+            return (
+              <div key={`general-${serviceName}`} style={styles.imagePullingSection}>
+                <div style={styles.imagePullingText}>
+                  {event.data?.message || `Downloading image for ${serviceName}...`}
+                  {event.data?.progress !== undefined && (
+                    <span> ({event.data.progress}%)</span>
+                  )}
+                </div>
+                {event.data?.progress !== undefined && (
+                  <div style={styles.imagePullProgressBar}>
+                    <div
+                      style={{
+                        ...styles.imagePullProgressFill,
+                        width: `${event.data.progress}%`
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          }
+        }
+        return null;
+      })}
+
       <div style={styles.serviceList}>
         {services.map((service) => (
           <div key={service.name} style={styles.serviceCard}>
@@ -205,17 +373,93 @@ export default function ServicesTab() {
                 <div style={styles.serviceDescription}>{service.description}</div>
               </div>
               <div style={styles.serviceStatus}>
-                <div
-                  style={{
-                    ...styles.statusBadge,
-                    background: `${getStatusColor(service.status)}22`,
-                    color: getStatusColor(service.status)
-                  }}
-                >
-                  {getHealthIcon(service.health)} {service.status}
-                </div>
+                {isImagePulling(service.name) ? (
+                  <div style={styles.statusBadge}>
+                    <span style={{ color: '#f57c00' }}>Pulling image...</span>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      ...styles.statusBadge,
+                      background: `${getStatusColor(service.status)}22`,
+                      color: getStatusColor(service.status)
+                    }}
+                  >
+                    {getHealthIcon(service.health)} {service.status}
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Image pulling progress display */}
+            {isImagePulling(service.name) && (
+              <div style={styles.imagePullingSection}>
+                {getImagePullProgress(service.name)?.allPhases ? (
+                  // Show detailed phase progress if available
+                  (() => {
+                    const { downloading, extracting } = getImagePullProgress(service.name).allPhases;
+
+                    return (
+                      <>
+                        <div style={styles.imagePullingText}>
+                          {getImagePullProgress(service.name)?.message || 'Pulling image...'}
+                        </div>
+
+                        {/* Downloading Phase */}
+                        <div style={styles.phaseContainer}>
+                          <div style={styles.phaseLabel}>Downloading:</div>
+                          <div style={styles.imagePullProgressBar}>
+                            <div
+                              style={{
+                                ...styles.imagePullProgressFill,
+                                width: `${downloading.progress}%`,
+                                background: '#4caf50'
+                              }}
+                            />
+                          </div>
+                          <div style={styles.phaseProgress}>{downloading.progress}% - {downloading.status}</div>
+                        </div>
+
+                        {/* Extracting Phase */}
+                        <div style={styles.phaseContainer}>
+                          <div style={styles.phaseLabel}>Extracting:</div>
+                          <div style={styles.imagePullProgressBar}>
+                            <div
+                              style={{
+                                ...styles.imagePullProgressFill,
+                                width: `${extracting.progress}%`,
+                                background: '#ff9800'
+                              }}
+                            />
+                          </div>
+                          <div style={styles.phaseProgress}>{extracting.progress}% - {extracting.status}</div>
+                        </div>
+                      </>
+                    );
+                  })()
+                ) : (
+                  // Fallback to single progress bar if no phase info
+                  <>
+                    <div style={styles.imagePullingText}>
+                      {getImagePullProgress(service.name)?.message || 'Pulling image...'}
+                      {getImagePullProgress(service.name)?.progress !== undefined && (
+                        <span> ({getImagePullProgress(service.name).progress}%)</span>
+                      )}
+                    </div>
+                    {getImagePullProgress(service.name)?.progress !== undefined && (
+                      <div style={styles.imagePullProgressBar}>
+                        <div
+                          style={{
+                            ...styles.imagePullProgressFill,
+                            width: `${getImagePullProgress(service.name).progress}%`
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {service.error && (
               <div style={styles.errorText}>{service.error}</div>
@@ -310,6 +554,12 @@ export default function ServicesTab() {
           onClose={() => setShowLogs(null)}
         />
       )}
+
+      {/* Image Download Permission Modal */}
+      <ImageDownloadPermissionModal
+        onRequest={window.kai['image-download-permission'].onRequest}
+        respond={window.kai['image-download-permission'].respond}
+      />
     </div>
   )
 }
@@ -495,6 +745,46 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#666',
     fontFamily: 'monospace',
     minWidth: '120px',
+    textAlign: 'right'
+  },
+  imagePullingSection: {
+    marginBottom: '15px',
+    padding: '12px',
+    background: '#fff3e0',
+    borderRadius: '6px'
+  },
+  imagePullingText: {
+    fontSize: '13px',
+    color: '#e65100',
+    marginBottom: '5px'
+  },
+  imagePullProgressBar: {
+    height: '6px',
+    background: '#e0e0e0',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  imagePullProgressFill: {
+    height: '100%',
+    background: '#f57c00',
+    transition: 'width 0.3s ease'
+  },
+  phaseContainer: {
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  phaseLabel: {
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#666',
+    minWidth: '70px'
+  },
+  phaseProgress: {
+    fontSize: '11px',
+    color: '#666',
+    minWidth: '100px',
     textAlign: 'right'
   }
 }

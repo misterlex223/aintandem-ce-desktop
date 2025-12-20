@@ -24,9 +24,9 @@ export class ConfigStore {
       schema: {
         setupCompleted: { type: 'boolean' },
         setupVersion: { type: 'string' },
-        preferredRuntime: { type: 'string', enum: ['auto', 'docker', 'containerd'] },
+        preferredRuntime: { type: 'string', enum: ['auto', 'docker', 'containerd', 'lima'] },
         baseDirectory: { type: 'string' },
-        cloudFrontendUrl: { type: 'string' },
+        frontendUrl: { type: 'string' },
         services: {
           type: 'object',
           properties: {
@@ -37,23 +37,10 @@ export class ConfigStore {
                 nodeEnv: { type: 'string', enum: ['development', 'production'] }
               }
             },
-            neo4j: {
-              type: 'object',
-              properties: {
-                password: { type: 'string' },
-                port: { type: 'number' }
-              }
-            },
             codeServer: {
               type: 'object',
               properties: {
                 password: { type: 'string' },
-                port: { type: 'number' }
-              }
-            },
-            qdrant: {
-              type: 'object',
-              properties: {
                 port: { type: 'number' }
               }
             }
@@ -141,16 +128,6 @@ export class ConfigStore {
       })
     }
 
-    // Validate Neo4j password
-    if (config?.services?.neo4j?.password !== undefined) {
-      const password = config.services.neo4j.password
-      if (password && password.length < 8) {
-        errors.push({
-          field: 'services.neo4j.password',
-          message: 'Neo4j password must be at least 8 characters'
-        })
-      }
-    }
 
     // Validate Code Server password
     if (config?.services?.codeServer?.password !== undefined) {
@@ -164,13 +141,13 @@ export class ConfigStore {
     }
 
     // Validate cloud frontend URL
-    if (config?.cloudFrontendUrl !== undefined && config.cloudFrontendUrl) {
+    if (config?.frontendUrl !== undefined && config.frontendUrl) {
       try {
-        new URL(config.cloudFrontendUrl)
+        new URL(config.frontendUrl)
       } catch {
         errors.push({
-          field: 'cloudFrontendUrl',
-          message: 'Cloud frontend URL must be a valid URL'
+          field: 'frontendUrl',
+          message: 'Frontend URL must be a valid URL'
         })
       }
     }
@@ -178,9 +155,7 @@ export class ConfigStore {
     // Validate ports
     const ports = [
       { field: 'services.backend.port', value: config?.services?.backend?.port },
-      { field: 'services.neo4j.port', value: config?.services?.neo4j?.port },
-      { field: 'services.codeServer.port', value: config?.services?.codeServer?.port },
-      { field: 'services.qdrant.port', value: config?.services?.qdrant?.port }
+      { field: 'services.codeServer.port', value: config?.services?.codeServer?.port }
     ]
 
     ports.forEach(({ field, value }) => {
@@ -218,7 +193,7 @@ export class ConfigStore {
    * Get default base directory suggestion
    */
   getDefaultBaseDirectory(): string {
-    return path.join(homedir(), 'KaiBase')
+    return path.join(homedir(), 'AiTBase')
   }
 
   /**

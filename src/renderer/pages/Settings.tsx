@@ -16,6 +16,8 @@ export default function Settings({ onClose }: SettingsProps) {
     current: 'docker' | 'containerd' | 'none'
   } | null>(null)
   const [switching, setSwitching] = useState(false)
+  const [showBackendPassword, setShowBackendPassword] = useState(false)
+  const [showCodeServerPassword, setShowCodeServerPassword] = useState(false)
 
   useEffect(() => {
     loadConfig()
@@ -107,6 +109,43 @@ export default function Settings({ onClose }: SettingsProps) {
     )
   }
 
+  // Password input component with visibility toggle
+  const PasswordInput = ({
+    value,
+    onChange,
+    placeholder,
+    showPassword,
+    setShowPassword,
+    configPath
+  }: {
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    placeholder: string;
+    showPassword: boolean;
+    setShowPassword: (show: boolean) => void;
+    configPath: string;
+  }) => {
+    return (
+      <div style={styles.passwordContainer}>
+        <input
+          type={showPassword ? 'text' : 'password'}
+          style={styles.input}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          style={styles.passwordToggle}
+          onClick={() => setShowPassword(!showPassword)}
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+        >
+          {showPassword ? '👁️' : '👁️‍🗨️'}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
@@ -157,8 +196,8 @@ export default function Settings({ onClose }: SettingsProps) {
                 <input
                   type="text"
                   style={styles.input}
-                  value={config.cloudFrontendUrl}
-                  onChange={(e) => setConfig({...config, cloudFrontendUrl: e.target.value})}
+                  value={config.frontendUrl}
+                  onChange={(e) => setConfig({...config, frontendUrl: e.target.value})}
                 />
                 <p style={styles.hint}>URL of your cloud-deployed frontend</p>
               </div>
@@ -232,7 +271,7 @@ export default function Settings({ onClose }: SettingsProps) {
                   </div>
                   <p style={styles.hint}>
                     {!runtimeStatus.docker && !runtimeStatus.containerd && (
-                      <>No container runtime detected. Install Docker Desktop or nerdctl to use Kai Desktop.</>
+                      <>No container runtime detected. Install Docker Desktop or nerdctl to use AInTandem Desktop.</>
                     )}
                     {(runtimeStatus.docker || runtimeStatus.containerd) && (
                       <>You can switch between available runtimes. App will restart services after switching.</>
@@ -269,22 +308,24 @@ export default function Settings({ onClose }: SettingsProps) {
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>Neo4j Port</label>
+                <label style={styles.label}>Backend Username</label>
                 <input
-                  type="number"
+                  type="text"
                   style={styles.input}
-                  value={config.services.neo4j.port}
-                  onChange={(e) => setConfig({...config, services: {...config.services, neo4j: {...config.services.neo4j, port: parseInt(e.target.value)}}})}
+                  value={config.services.backend.username || 'admin'}
+                  onChange={(e) => setConfig({...config, services: {...config.services, backend: {...config.services.backend, username: e.target.value}}})}
                 />
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>Neo4j Password</label>
-                <input
-                  type="password"
-                  style={styles.input}
-                  value={config.services.neo4j.password}
-                  onChange={(e) => setConfig({...config, services: {...config.services, neo4j: {...config.services.neo4j, password: e.target.value}}})}
+                <label style={styles.label}>Backend Password</label>
+                <PasswordInput
+                  value={config.services.backend.password || 'aintandem'}
+                  onChange={(e) => setConfig({...config, services: {...config.services, backend: {...config.services.backend, password: e.target.value}}})}
+                  placeholder="Enter backend password"
+                  showPassword={showBackendPassword}
+                  setShowPassword={setShowBackendPassword}
+                  configPath="services.backend.password"
                 />
               </div>
 
@@ -300,21 +341,13 @@ export default function Settings({ onClose }: SettingsProps) {
 
               <div style={styles.field}>
                 <label style={styles.label}>Code Server Password</label>
-                <input
-                  type="password"
-                  style={styles.input}
+                <PasswordInput
                   value={config.services.codeServer.password}
                   onChange={(e) => setConfig({...config, services: {...config.services, codeServer: {...config.services.codeServer, password: e.target.value}}})}
-                />
-              </div>
-
-              <div style={styles.field}>
-                <label style={styles.label}>Qdrant Port</label>
-                <input
-                  type="number"
-                  style={styles.input}
-                  value={config.services.qdrant.port}
-                  onChange={(e) => setConfig({...config, services: {...config.services, qdrant: {...config.services.qdrant, port: parseInt(e.target.value)}}})}
+                  placeholder="Enter code server password"
+                  showPassword={showCodeServerPassword}
+                  setShowPassword={setShowCodeServerPassword}
+                  configPath="services.codeServer.password"
                 />
               </div>
             </div>
@@ -494,6 +527,22 @@ const styles: Record<string, React.CSSProperties> = {
     border: '2px solid #e0e0e0',
     borderRadius: '6px',
     outline: 'none'
+  },
+  passwordContainer: {
+    position: 'relative',
+    width: '100%'
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    fontSize: '16px',
+    cursor: 'pointer',
+    padding: '2px',
+    borderRadius: '4px'
   },
   select: {
     width: '100%',
