@@ -11,9 +11,8 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
   const [step, setStep] = useState(runtimeType === 'none' ? 0 : 1)
   const [config, setConfig] = useState({
     baseDirectory: '',
-    neo4jPassword: '',
     codeServerPassword: '',
-    cloudFrontendUrl: ''
+    frontendUrl: 'http://localhost:9901'
   })
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -30,10 +29,10 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
   }, [])
 
   const handleNext = async () => {
-    if (step < 4) {
+    if (step < 3) {
       setStep(step + 1)
     } else {
-      // Save config and complete setup
+      // Save config and complete setup (skip the cloud frontend step)
       setSaving(true)
       setValidationErrors([])
 
@@ -41,12 +40,10 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
         // Validate configuration
         const validation = await window.kai.config.validate({
           baseDirectory: config.baseDirectory,
-          cloudFrontendUrl: config.cloudFrontendUrl,
+          frontendUrl: 'http://localhost:9901', // Use default value
           services: {
-            neo4j: { password: config.neo4jPassword, port: 7687 },
             codeServer: { password: config.codeServerPassword, port: 8443 },
-            backend: { port: 9900, nodeEnv: 'production' },
-            qdrant: { port: 6333 }
+            backend: { port: 9900, nodeEnv: 'production' }
           }
         })
 
@@ -59,12 +56,10 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
         // Save configuration
         await window.kai.config.update({
           baseDirectory: config.baseDirectory,
-          cloudFrontendUrl: config.cloudFrontendUrl,
+          frontendUrl: 'http://localhost:9901', // Use default value
           services: {
-            neo4j: { password: config.neo4jPassword, port: 7687 },
             codeServer: { password: config.codeServerPassword, port: 8443 },
-            backend: { port: 9900, nodeEnv: 'production' },
-            qdrant: { port: 6333 }
+            backend: { port: 9900, nodeEnv: 'production' }
           }
         })
 
@@ -95,11 +90,11 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
   return (
     <div style={styles.container}>
       <div style={styles.wizard}>
-        <h1 style={styles.title}>Kai Desktop Setup</h1>
+        <h1 style={styles.title}>AInTandem Setup</h1>
 
         {/* Progress indicator */}
         <div style={styles.progress}>
-          {[1, 2, 3, 4].map((s) => (
+          {[1, 2, 3].map((s) => (
             <div
               key={s}
               style={{
@@ -123,9 +118,9 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
 
           {step === 1 && (
             <div>
-              <h2 style={styles.stepTitle}>Welcome to Kai Desktop</h2>
+              <h2 style={styles.stepTitle}>Welcome to AInTandem</h2>
               <p style={styles.text}>
-                Kai Desktop helps you manage containerized development environments with ease.
+                Build with AI, safely, on your own machine.
               </p>
               <div style={styles.infoBox}>
                 <strong>Runtime Detected:</strong> {runtimeType}
@@ -153,7 +148,7 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
               <input
                 type="text"
                 style={styles.input}
-                placeholder="e.g., /Users/yourname/KaiBase"
+                placeholder="e.g., /Users/yourname/AiTBase"
                 value={config.baseDirectory}
                 onChange={(e) =>
                   setConfig({ ...config, baseDirectory: e.target.value })
@@ -166,17 +161,6 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
             <div>
               <h2 style={styles.stepTitle}>Security Configuration</h2>
               <p style={styles.text}>Set passwords for your services.</p>
-
-              <label style={styles.label}>Neo4j Password</label>
-              <input
-                type="password"
-                style={styles.input}
-                placeholder="Enter Neo4j password"
-                value={config.neo4jPassword}
-                onChange={(e) =>
-                  setConfig({ ...config, neo4jPassword: e.target.value })
-                }
-              />
 
               <label style={styles.label}>Code Server Password</label>
               <input
@@ -191,23 +175,6 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
             </div>
           )}
 
-          {step === 4 && (
-            <div>
-              <h2 style={styles.stepTitle}>Cloud Frontend</h2>
-              <p style={styles.text}>
-                Enter the URL of your cloud-deployed frontend.
-              </p>
-              <input
-                type="text"
-                style={styles.input}
-                placeholder="e.g., https://kai-frontend.example.com"
-                value={config.cloudFrontendUrl}
-                onChange={(e) =>
-                  setConfig({ ...config, cloudFrontendUrl: e.target.value })
-                }
-              />
-            </div>
-          )}
         </div>
 
         {/* Validation errors */}
@@ -237,7 +204,7 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
               onClick={handleNext}
               disabled={saving}
             >
-              {saving ? 'Saving...' : (step === 4 ? 'Finish' : 'Next')}
+              {saving ? 'Saving...' : (step === 3 ? 'Finish' : 'Next')}
             </button>
           </div>
         )}

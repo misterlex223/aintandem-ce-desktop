@@ -1,5 +1,5 @@
 /**
- * Configuration types for Kai Desktop
+ * Configuration types for AInTandem Desktop
  */
 
 export interface KaiConfig {
@@ -18,22 +18,17 @@ export interface KaiConfig {
     backend: {
       port: number
       nodeEnv: 'development' | 'production'
-    }
-    neo4j: {
-      password: string
-      port: number
+      username?: string
+      password?: string
     }
     codeServer: {
       password: string
       port: number
     }
-    qdrant: {
-      port: number
-    }
   }
 
   // Cloud frontend
-  cloudFrontendUrl: string
+  frontendUrl: string
 
   // Advanced environment variables (from docker-compose.yml)
   env: {
@@ -80,23 +75,18 @@ export const defaultConfig: KaiConfig = {
   services: {
     backend: {
       port: 9900,
-      nodeEnv: 'production'
-    },
-    neo4j: {
-      password: '',
-      port: 7687
+      nodeEnv: 'production',
+      username: 'admin',
+      password: 'aintandem'
     },
     codeServer: {
       password: '',
       port: 8443
-    },
-    qdrant: {
-      port: 6333
     }
   },
-  cloudFrontendUrl: '',
+  frontendUrl: 'http://localhost:9901',
   env: {
-    dockerNetwork: 'kai-net',
+    dockerNetwork: 'aintandem-net',
     imageName: 'flexy-dev-sandbox:latest',
     enablePersistentAiSessions: true,
     aiSessionMode: 'interactive',
