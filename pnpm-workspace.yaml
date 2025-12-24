@@ -1,9 +1,0 @@
-ignoredBuiltDependencies:
-  - cpu-features
-  - electron-winstaller
-  - esbuild
-  - protobufjs
-  - ssh2
-
-onlyBuiltDependencies:
-  - electron

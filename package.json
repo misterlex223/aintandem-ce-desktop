@@ -17,18 +17,18 @@
     "dist:bundled:all": "node scripts/download-bundled-runtime.js && pnpm dist",
     "download-runtime": "node scripts/download-bundled-runtime.js",
     "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "release": "electron-builder --publish=always"
+    "lint:fix": "eslint src --ext .ts,.tsx --fix"
   },
   "keywords": [
     "electron",
     "docker",
     "containers",
-    "kai"
+    "ai",
+    "agents",
+    "aintandem"
   ],
   "author": "AInTandem",
   "license": "AGPL-3.0-only",
-  "packageManager": "pnpm@10.15.1",
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
@@ -82,7 +82,9 @@
       {
         "provider": "github",
         "owner": "aintandem",
-        "repo": "ce-desktop"
+        "repo": "ce-desktop",
+        "releaseType": "prerelease",
+        "channel": "alpha"
       }
     ],
     "mac": {
@@ -93,19 +95,14 @@
       ],
       "category": "public.app-category.developer-tools",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "publish": [
-        "github"
-      ]
+      "identity": null
     },
     "win": {
       "icon": "build_assets/icon.png",
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "publish": [
-        "github"
-      ]
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "linux": {
       "icon": "build_assets/icon.png",
@@ -113,10 +110,7 @@
         "AppImage"
       ],
       "category": "Development",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "publish": [
-        "github"
-      ]
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
