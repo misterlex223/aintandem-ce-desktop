@@ -12,7 +12,7 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
   const [config, setConfig] = useState({
     baseDirectory: '',
     codeServerPassword: '',
-    frontendUrl: 'http://localhost:9901'
+    frontendUrl: 'https://console.aintandem.org'
   })
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -40,10 +40,10 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
         // Validate configuration
         const validation = await window.kai.config.validate({
           baseDirectory: config.baseDirectory,
-          frontendUrl: 'http://localhost:9901', // Use default value
+          frontendUrl: config.frontendUrl || 'https://console.aintandem.org', // Use configured value
           services: {
             codeServer: { password: config.codeServerPassword, port: 8443 },
-            backend: { port: 9900, nodeEnv: 'production' }
+            orchestrator: { port: 9900, nodeEnv: 'production' }
           }
         })
 
@@ -56,10 +56,10 @@ export default function SetupWizard({ onComplete, runtimeType }: SetupWizardProp
         // Save configuration
         await window.kai.config.update({
           baseDirectory: config.baseDirectory,
-          frontendUrl: 'http://localhost:9901', // Use default value
+          frontendUrl: config.frontendUrl || 'https://console.aintandem.org', // Use configured value
           services: {
             codeServer: { password: config.codeServerPassword, port: 8443 },
-            backend: { port: 9900, nodeEnv: 'production' }
+            orchestrator: { port: 9900, nodeEnv: 'production' }
           }
         })
 

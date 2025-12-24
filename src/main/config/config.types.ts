@@ -15,7 +15,7 @@ export interface KaiConfig {
 
   // Services
   services: {
-    backend: {
+    orchestrator: {
       port: number
       nodeEnv: 'development' | 'production'
       username?: string
@@ -60,6 +60,14 @@ export interface KaiConfig {
     startMinimized: boolean
     minimizeToTray: boolean
   }
+
+  // Update preferences
+  updates: {
+    autoCheck: boolean
+    autoDownload: boolean
+    autoInstall: boolean
+    channel: 'stable' | 'beta' | 'alpha'
+  }
 }
 
 /**
@@ -73,7 +81,7 @@ export const defaultConfig: KaiConfig = {
   preferredRuntime: 'auto',
   baseDirectory: '',
   services: {
-    backend: {
+    orchestrator: {
       port: 9900,
       nodeEnv: 'production',
       username: 'admin',
@@ -84,7 +92,7 @@ export const defaultConfig: KaiConfig = {
       port: 8443
     }
   },
-  frontendUrl: 'http://localhost:9901',
+  frontendUrl: 'https://console.aintandem.org',
   env: {
     dockerNetwork: 'aintandem-net',
     imageName: 'flexy-dev-sandbox:latest',
@@ -104,6 +112,12 @@ export const defaultConfig: KaiConfig = {
     theme: 'system',
     startMinimized: false,
     minimizeToTray: true
+  },
+  updates: {
+    autoCheck: true,
+    autoDownload: false,
+    autoInstall: false,
+    channel: 'stable'
   }
 }
 

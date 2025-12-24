@@ -35,7 +35,7 @@ export class ImageLoader {
     onProgress?: (message: string) => void
   ): Promise<void> {
     const manifestPath = join(this.resourcesPath, 'image-manifest.json')
-    const imagePath = join(this.resourcesPath, 'kai-backend-image.tar.gz')
+    const imagePath = join(this.resourcesPath, 'orchestrator-ce-image.tar.gz')
 
     // Check if manifest exists
     if (!existsSync(manifestPath)) {

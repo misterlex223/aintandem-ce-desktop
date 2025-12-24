@@ -2,6 +2,20 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { ContainerConfig, ContainerInfo, ImageInfo, NetworkInfo, VolumeInfo } from '../main/services/container-runtime.interface'
 import type { KaiConfig, ConfigValidationResult } from '../main/config/config.types'
 
+// Helper function to create event listener APIs
+function createEventListenerAPI<T>(eventName: string, callback: (data: T) => void) {
+  const listener = (_event: any, data: T) => callback(data)
+  ipcRenderer.on(eventName, listener)
+  return () => ipcRenderer.removeListener(eventName, listener)
+}
+
+// Helper function to create event listener APIs without data
+function createSimpleEventListenerAPI(eventName: string, callback: () => void) {
+  const listener = () => callback()
+  ipcRenderer.on(eventName, listener)
+  return () => ipcRenderer.removeListener(eventName, listener)
+}
+
 // Define the API that will be exposed to the renderer
 const api = {
   // Runtime
@@ -17,11 +31,8 @@ const api = {
     switch: (type: 'docker' | 'containerd' | 'lima') => ipcRenderer.invoke('runtime:switch', type) as Promise<'docker' | 'containerd' | 'lima' | 'none'>,
     restart: () => ipcRenderer.invoke('runtime:restart') as Promise<void>,
     setupBundled: () => ipcRenderer.invoke('runtime:setupBundled') as Promise<{ success: boolean; runtime?: string; error?: string }>,
-    onSetupProgress: (callback: (message: string) => void) => {
-      const listener = (_event: any, message: string) => callback(message)
-      ipcRenderer.on('runtime:setup-progress', listener)
-      return () => ipcRenderer.removeListener('runtime:setup-progress', listener)
-    }
+    onSetupProgress: (callback: (message: string) => void) =>
+      createEventListenerAPI('runtime:setup-progress', callback)
   },
 
   // Container operations
@@ -56,11 +67,8 @@ const api = {
     exists: (name: string) => ipcRenderer.invoke('image:exists', name) as Promise<boolean>,
     remove: (id: string, force?: boolean) =>
       ipcRenderer.invoke('image:remove', id, force) as Promise<void>,
-    onPullProgress: (callback: (data: { name: string; progress: any }) => void) => {
-      const listener = (_event: any, data: any) => callback(data)
-      ipcRenderer.on('image:pullProgress', listener)
-      return () => ipcRenderer.removeListener('image:pullProgress', listener)
-    }
+    onPullProgress: (callback: (data: { name: string; progress: any }) => void) =>
+      createEventListenerAPI('image:pullProgress', callback)
   },
 
   // Network operations
@@ -134,25 +142,16 @@ const api = {
 
   // Service events
   'service-events': {
-    onServiceEvent: (callback: (event: { serviceName: string; eventType: string; data: any }) => void) => {
-      const listener = (_event: any, event: { serviceName: string; eventType: string; data: any }) => callback(event)
-      ipcRenderer.on('service-event', listener)
-      return () => ipcRenderer.removeListener('service-event', listener)
-    },
-    onServicesUpdated: (callback: (services: any[]) => void) => {
-      const listener = (_event: any, services: any[]) => callback(services)
-      ipcRenderer.on('services-updated', listener)
-      return () => ipcRenderer.removeListener('services-updated', listener)
-    }
+    onServiceEvent: (callback: (event: { serviceName: string; eventType: string; data: any }) => void) =>
+      createEventListenerAPI('service-event', callback),
+    onServicesUpdated: (callback: (services: any[]) => void) =>
+      createEventListenerAPI('services-updated', callback)
   },
 
   // Image download permission
   'image-download-permission': {
-    onRequest: (callback: (request: { id: string; serviceName: string; imageName: string; size: string }) => void) => {
-      const listener = (_event: any, request: { id: string; serviceName: string; imageName: string; size: string }) => callback(request)
-      ipcRenderer.on('image-download-permission-request', listener)
-      return () => ipcRenderer.removeListener('image-download-permission-request', listener)
-    },
+    onRequest: (callback: (request: { id: string; serviceName: string; imageName: string; size: string }) => void) =>
+      createEventListenerAPI('image-download-permission-request', callback),
     respond: (requestId: string, allowed: boolean) => {
       ipcRenderer.send('image-download-permission-response', requestId, allowed)
     }
@@ -163,36 +162,18 @@ const api = {
     check: () => ipcRenderer.invoke('update:check') as Promise<{ available: boolean; version: string }>,
     download: () => ipcRenderer.invoke('update:download') as Promise<void>,
     install: () => ipcRenderer.invoke('update:install') as Promise<void>,
-    onChecking: (callback: () => void) => {
-      const listener = () => callback()
-      ipcRenderer.on('update:checking', listener)
-      return () => ipcRenderer.removeListener('update:checking', listener)
-    },
-    onAvailable: (callback: (info: { version: string; releaseNotes?: string; releaseDate?: string }) => void) => {
-      const listener = (_event: any, info: any) => callback(info)
-      ipcRenderer.on('update:available', listener)
-      return () => ipcRenderer.removeListener('update:available', listener)
-    },
-    onNotAvailable: (callback: () => void) => {
-      const listener = () => callback()
-      ipcRenderer.on('update:not-available', listener)
-      return () => ipcRenderer.removeListener('update:not-available', listener)
-    },
-    onError: (callback: (message: string) => void) => {
-      const listener = (_event: any, message: string) => callback(message)
-      ipcRenderer.on('update:error', listener)
-      return () => ipcRenderer.removeListener('update:error', listener)
-    },
-    onDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
-      const listener = (_event: any, progress: any) => callback(progress)
-      ipcRenderer.on('update:download-progress', listener)
-      return () => ipcRenderer.removeListener('update:download-progress', listener)
-    },
-    onDownloaded: (callback: (info: { version: string }) => void) => {
-      const listener = (_event: any, info: any) => callback(info)
-      ipcRenderer.on('update:downloaded', listener)
-      return () => ipcRenderer.removeListener('update:downloaded', listener)
-    }
+    onChecking: (callback: () => void) =>
+      createSimpleEventListenerAPI('update:checking', callback),
+    onAvailable: (callback: (info: { version: string; releaseNotes?: string; releaseDate?: string }) => void) =>
+      createEventListenerAPI('update:available', callback),
+    onNotAvailable: (callback: () => void) =>
+      createSimpleEventListenerAPI('update:not-available', callback),
+    onError: (callback: (message: string) => void) =>
+      createEventListenerAPI('update:error', callback),
+    onDownloadProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) =>
+      createEventListenerAPI('update:download-progress', callback),
+    onDownloaded: (callback: (info: { version: string }) => void) =>
+      createEventListenerAPI('update:downloaded', callback)
   },
 
   // Window operations
@@ -214,16 +195,24 @@ const api = {
 
   // About dialog
   'about-dialog': {
-    onShow: (callback: () => void) => {
-      const listener = () => callback();
-      ipcRenderer.on('show-about-dialog', listener);
-      return () => ipcRenderer.removeListener('show-about-dialog', listener);
-    }
+    onShow: (callback: () => void) =>
+      createSimpleEventListenerAPI('show-about-dialog', callback)
+  },
+
+  // API proxy for making requests to localhost:9900
+  apiProxy: {
+    request: (options: { method: string; path: string; headers?: any; body?: any }) =>
+      ipcRenderer.invoke('api-proxy:request', options) as Promise<{
+        statusCode: number;
+        headers: any;
+        data: string;
+      }>
   }
 }
 
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('kai', api)
+contextBridge.exposeInMainWorld('__IN_AINTANDEM_DESKTOP__', true)
 
 // Expose limited Node.js functionality for renderer (only if needed)
 // NOTE: Exposing Node.js APIs to renderer can be a security risk
@@ -256,8 +245,8 @@ contextBridge.exposeInMainWorld('aintandemCredentials', {
       try {
         const config = await window.kai.config.get();
         return {
-          username: config.services.backend.username || DEFAULT_USERNAME,
-          password: config.services.backend.password || DEFAULT_PASSWORD
+          username: config.services.orchestrator.username || DEFAULT_USERNAME,
+          password: config.services.orchestrator.password || DEFAULT_PASSWORD
         };
       } catch (error) {
         console.error('Could not retrieve backend credentials:', error);

@@ -192,14 +192,14 @@ export default function Settings({ onClose }: SettingsProps) {
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>Cloud Frontend URL</label>
+                <label style={styles.label}>Console URL</label>
                 <input
                   type="text"
                   style={styles.input}
                   value={config.frontendUrl}
                   onChange={(e) => setConfig({...config, frontendUrl: e.target.value})}
                 />
-                <p style={styles.hint}>URL of your cloud-deployed frontend</p>
+                <p style={styles.hint}>URL of AInTandem Console</p>
               </div>
 
               <div style={styles.field}>
@@ -298,34 +298,34 @@ export default function Settings({ onClose }: SettingsProps) {
           {tab === 'services' && (
             <div>
               <div style={styles.field}>
-                <label style={styles.label}>Backend Port</label>
+                <label style={styles.label}>Orchestrator Port</label>
                 <input
                   type="number"
                   style={styles.input}
-                  value={config.services.backend.port}
-                  onChange={(e) => setConfig({...config, services: {...config.services, backend: {...config.services.backend, port: parseInt(e.target.value)}}})}
+                  value={config.services.orchestrator.port}
+                  onChange={(e) => setConfig({...config, services: {...config.services, orchestrator: {...config.services.orchestrator, port: parseInt(e.target.value)}}})}
                 />
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>Backend Username</label>
+                <label style={styles.label}>Orchestrator Username</label>
                 <input
                   type="text"
                   style={styles.input}
-                  value={config.services.backend.username || 'admin'}
-                  onChange={(e) => setConfig({...config, services: {...config.services, backend: {...config.services.backend, username: e.target.value}}})}
+                  value={config.services.orchestrator.username || 'admin'}
+                  onChange={(e) => setConfig({...config, services: {...config.services, orchestrator: {...config.services.orchestrator, username: e.target.value}}})}
                 />
               </div>
 
               <div style={styles.field}>
-                <label style={styles.label}>Backend Password</label>
+                <label style={styles.label}>Orchestrator Password</label>
                 <PasswordInput
-                  value={config.services.backend.password || 'aintandem'}
-                  onChange={(e) => setConfig({...config, services: {...config.services, backend: {...config.services.backend, password: e.target.value}}})}
-                  placeholder="Enter backend password"
+                  value={config.services.orchestrator.password || 'aintandem'}
+                  onChange={(e) => setConfig({...config, services: {...config.services, orchestrator: {...config.services.orchestrator, password: e.target.value}}})}
+                  placeholder="Enter orchestrator password"
                   showPassword={showBackendPassword}
                   setShowPassword={setShowBackendPassword}
-                  configPath="services.backend.password"
+                  configPath="services.orchestrator.password"
                 />
               </div>
 
@@ -397,6 +397,52 @@ export default function Settings({ onClose }: SettingsProps) {
                   value={config.env.taskCompletionTimeout}
                   onChange={(e) => setConfig({...config, env: {...config.env, taskCompletionTimeout: parseInt(e.target.value)}})}
                 />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={config.updates.autoCheck}
+                    onChange={(e) => setConfig({...config, updates: {...config.updates, autoCheck: e.target.checked}})}
+                  />
+                  <span style={{marginLeft: '8px'}}>Automatically check for updates</span>
+                </label>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={config.updates.autoDownload}
+                    onChange={(e) => setConfig({...config, updates: {...config.updates, autoDownload: e.target.checked}})}
+                  />
+                  <span style={{marginLeft: '8px'}}>Automatically download updates</span>
+                </label>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={config.updates.autoInstall}
+                    onChange={(e) => setConfig({...config, updates: {...config.updates, autoInstall: e.target.checked}})}
+                  />
+                  <span style={{marginLeft: '8px'}}>Automatically install updates on exit</span>
+                </label>
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>Update Channel</label>
+                <select
+                  style={styles.select}
+                  value={config.updates.channel}
+                  onChange={(e) => setConfig({...config, updates: {...config.updates, channel: e.target.value as 'stable' | 'beta' | 'alpha'}})}
+                >
+                  <option value="stable">Stable</option>
+                  <option value="beta">Beta</option>
+                  <option value="alpha">Alpha</option>
+                </select>
               </div>
             </div>
           )}

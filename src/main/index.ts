@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session } from 'electron'
 import { join } from 'path'
 import { autoUpdater } from 'electron-updater'
 import { getContainerManager } from './services/container-manager'
 import { getConfigStore, getConfigStoreSync } from './config/config-store'
 import { getServiceManager } from './services/service-manager'
 import { getImageLoader } from './services/image-loader'
+import * as http from 'http';
+import * as https from 'https';
+import { URL } from 'url';
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -13,20 +16,23 @@ let aintandemWindowCount = 0;
 let isQuitting = false
 
 
+// Common window configuration
+const commonWindowConfig = {
+  width: 600,
+  height: 720,
+  minWidth: 600,
+  minHeight: 600,
+  webPreferences: {
+    preload: join(__dirname, '../preload/index.js'),
+    nodeIntegration: false,
+    contextIsolation: true
+  },
+  show: false // Don't show until ready
+};
+
 // Helper function to create a window with common configuration
 function createWindowBase(showDevTools: boolean = false, urlPath: string = ''): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 600,
-    height: 720,
-    minWidth: 600,
-    minHeight: 600,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      nodeIntegration: false,
-      contextIsolation: true
-    },
-    show: false // Don't show until ready
-  });
+  const window = new BrowserWindow(commonWindowConfig);
 
   // Load the renderer
   if (process.env.NODE_ENV === 'development') {
@@ -46,12 +52,75 @@ function createWindowBase(showDevTools: boolean = false, urlPath: string = ''): 
     }
   }
 
+  // Handle new window creation (e.g., when clicking external links)
+  window.webContents.setWindowOpenHandler(({ url, frameName, features }) => {
+    // Create a new window with the same webPreferences as this window
+    const newWindow = new BrowserWindow(commonWindowConfig);
+
+    // Apply any additional window features specified in the request
+    if (features) {
+      // Parse window features if needed to adjust window properties
+      // This is a simplified implementation - you could expand this to parse
+      // features like width, height, resizable, etc.
+    }
+
+    // Load the requested URL
+    if (process.env.NODE_ENV === 'development') {
+      newWindow.loadURL(url);
+    } else {
+      // For production, we need to handle the URL appropriately
+      newWindow.loadURL(url);
+    }
+
+    // Show window when ready
+    newWindow.once('ready-to-show', () => {
+      newWindow.show();
+    });
+
+    // Register the new window with the service manager to receive events
+    registerWindowWithServiceManager(newWindow);
+
+    // Return action to indicate the new window was handled
+    return { action: 'deny' }; // Prevent default window creation since we're handling it
+  });
+
   // Show window when ready
   window.once('ready-to-show', () => {
     window.show();
   });
 
   return window;
+}
+
+// Helper function to register a window with the service manager
+function registerWindowWithServiceManager(window: BrowserWindow, decrementCounterOnClose: boolean = false, customOnClose?: () => void) {
+  try {
+    const manager = getContainerManager();
+    const serviceManager = getServiceManager(manager.getRuntime());
+    serviceManager.registerWindow(window);
+
+    // Handle window closed event to ensure proper cleanup
+    window.on('closed', () => {
+      serviceManager.unregisterWindow(window);
+      if (decrementCounterOnClose) {
+        aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
+      }
+      if (customOnClose) {
+        customOnClose();
+      }
+    });
+  } catch (error) {
+    console.error('Failed to register window with service manager:', error);
+    // Handle window closed even if registration fails
+    window.on('closed', () => {
+      if (decrementCounterOnClose) {
+        aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
+      }
+      if (customOnClose) {
+        customOnClose();
+      }
+    });
+  }
 }
 
 // Function to create the main application window
@@ -102,23 +171,9 @@ function openDashboardWindow(onReady?: () => void) {
     dashboardWindow.show(); // Show immediately for dashboard
 
     // Register the dashboard window with the service manager to receive events
-    try {
-      const manager = getContainerManager();
-      const serviceManager = getServiceManager(manager.getRuntime());
-      serviceManager.registerWindow(dashboardWindow);
-
-      // Clean up when window is closed
-      dashboardWindow.on('closed', () => {
-        serviceManager.unregisterWindow(dashboardWindow!);
-        dashboardWindow = null; // Clear the reference when window is closed
-      });
-    } catch (error) {
-      console.error('Failed to register dashboard window with service manager:', error);
-      // Handle window closed even if registration fails
-      dashboardWindow.on('closed', () => {
-        dashboardWindow = null;
-      });
-    }
+    registerWindowWithServiceManager(dashboardWindow, false, () => {
+      dashboardWindow = null; // Clear the reference when window is closed
+    });
   }
 }
 
@@ -145,19 +200,23 @@ async function areAllEssentialServicesRunning(): Promise<boolean> {
   }
 }
 
+// Common AInTandem window configuration
+const commonAInTandemWindowConfig = {
+  width: 1200,
+  height: 800,
+  webPreferences: {
+    preload: join(__dirname, '../preload/index.js'),
+    partition: 'persist:console',
+    contextIsolation: true,
+    allowRunningInsecureContent: false
+  },
+  show: true
+};
+
 // Function to open a new AInTandem window (multiple instances allowed)
 function openAInTandemWindow() {
-  const aintandemWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      nodeIntegration: false,
-      contextIsolation: true
-    },
-    title: `AInTandem Window ${++aintandemWindowCount}`,
-    show: true
-  });
+  const aintandemWindow = new BrowserWindow(commonAInTandemWindowConfig);
+  aintandemWindow.setTitle(`Console ${++aintandemWindowCount}`);
 
   // Check for login page and perform automatic login if credentials are available
   const handleLoginPage = async () => {
@@ -271,34 +330,38 @@ function openAInTandemWindow() {
 
   aintandemWindow.webContents.on('did-navigate-in-page', handleLoginPage);
 
+  // Handle new window creation (e.g., when clicking external links)
+  aintandemWindow.webContents.setWindowOpenHandler(({ url, frameName, features }) => {
+    // Create a new window with the same configuration as the main window
+    const newWindow = new BrowserWindow({
+      ...commonAInTandemWindowConfig,
+      show: true // Override show to true for new windows from AInTandem
+    });
+
+    // Apply any additional window features specified in the request
+    if (features) {
+      // Parse window features if needed to adjust window properties
+      // This is a simplified implementation - you could expand this to parse
+      // features like width, height, resizable, etc.
+    }
+
+    // Load the requested URL
+    newWindow.loadURL(url);
+
+    // Register the new window with the service manager to receive events
+    registerWindowWithServiceManager(newWindow, true);
+
+    // Return action to indicate the new window was handled
+    return { action: 'deny' }; // Prevent default window creation since we're handling it
+  });
+
   // Load the AInTandem frontend
-  if (process.env.NODE_ENV === 'development') {
-    aintandemWindow.loadURL('http://localhost:9901');
-  } else {
-    // In production, load from local file or API endpoint as appropriate
-    aintandemWindow.loadURL('http://localhost:9901');
-  }
+  const config = getConfigStoreSync().getConfig();
+  const frontendUrl = config.frontendUrl || 'https://console.aintandem.org';
+  aintandemWindow.loadURL(frontendUrl);
 
   // Register the AInTandem window with the service manager to receive events
-  try {
-    const manager = getContainerManager();
-    const serviceManager = getServiceManager(manager.getRuntime());
-    serviceManager.registerWindow(aintandemWindow);
-
-    // Handle window closed
-    aintandemWindow.on('closed', () => {
-      serviceManager.unregisterWindow(aintandemWindow);
-      // Decrement the counter when window is closed
-      aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
-    });
-  } catch (error) {
-    console.error('Failed to register AInTandem window with service manager:', error);
-    // Handle window closed even if registration fails
-    aintandemWindow.on('closed', () => {
-      // Decrement the counter when window is closed
-      aintandemWindowCount = Math.max(0, aintandemWindowCount - 1);
-    });
-  }
+  registerWindowWithServiceManager(aintandemWindow, true);
 
   return aintandemWindow;
 }
@@ -427,9 +490,17 @@ async function updateTrayMenu() {
 
 // Auto-updater configuration
 function setupAutoUpdater() {
-  // Configure auto-updater
-  autoUpdater.autoDownload = false // Don't auto-download, ask user first
-  autoUpdater.autoInstallOnAppQuit = true
+  // Get config to determine update settings
+  const config = getConfigStoreSync().getConfig();
+
+  // Configure auto-updater based on user preferences
+  autoUpdater.autoDownload = config.updates.autoDownload;
+  autoUpdater.autoInstallOnAppQuit = config.updates.autoInstall;
+
+  // Set update channel if specified
+  if (config.updates.channel && config.updates.channel !== 'stable') {
+    autoUpdater.channel = config.updates.channel;
+  }
 
   // Event handlers
   autoUpdater.on('checking-for-update', () => {
@@ -473,8 +544,8 @@ function setupAutoUpdater() {
     })
   })
 
-  // Check for updates on startup (production only)
-  if (process.env.NODE_ENV !== 'development') {
+  // Check for updates on startup (production only) if autoCheck is enabled
+  if (process.env.NODE_ENV !== 'development' && config.updates.autoCheck) {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch((err) => {
         console.error('Failed to check for updates:', err)
@@ -519,6 +590,47 @@ app.whenReady().then(async () => {
     console.error('Failed to initialize container runtime:', error)
     // Still create window to show error to user
   }
+
+  // Configure CORS to allow remote frontend to access localhost API
+  const allowedOrigins = [
+    'https://kai-frontend-dev.ambmh.app',
+    'https://console.aintandem.org',
+    'https://localhost:*', // Allow all localhost origins
+    'http://localhost:*'   // Allow all localhost origins (for development)
+  ];
+
+  // Set up proxy for localhost:9900 API requests
+  // This allows remote origins to make requests that are forwarded to the localhost API
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    // Check if the request is coming from a remote origin and targeting localhost:9900
+    // In this case, we'll need to intercept and proxy the request
+    if (details.url.includes('://localhost:9900/api/')) {
+      // This is a direct request to localhost:9900 from a remote origin
+      // We can't directly fix CORS this way, so we'll need to make the request from the main process
+      // and forward the response back to the renderer
+      callback({ cancel: true });
+    } else {
+      callback({});
+    }
+  });
+
+  // Handle CORS for requests made from the Electron app itself
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    // Add CORS headers for responses from localhost:9900 API
+    if (details.url.startsWith('http://localhost:9900')) {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Access-Control-Allow-Origin': allowedOrigins,
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'X-Requested-With, Content-Type, Authorization',
+          'Access-Control-Allow-Credentials': ['true']
+        }
+      });
+    } else {
+      callback({ responseHeaders: details.responseHeaders });
+    }
+  });
 
   // Setup system tray
   createTray()
@@ -1233,5 +1345,92 @@ ipcMain.handle('update:install', async () => {
   // This will quit the app and install the update
   autoUpdater.quitAndInstall(false, true)
 })
+
+// Define port mapping based on path patterns
+const getPortForPath = (path: string): number => {
+  if (/^\/api\//.test(path)) {
+    return 9900; // Backend API
+  } else if (/^\/flexy\//.test(path)) {
+    return 9900; // Flexy service (assuming it's part of the backend)
+  } else if (/^\/code-server\//.test(path)) {
+    return 9900; // Code server
+  }
+  // Default to backend port if no specific pattern matches
+  return 9900;
+};
+
+// IPC handler to proxy API requests to appropriate localhost services
+// This allows remote origins to make requests to the local services through the main process
+ipcMain.handle('api-proxy:request', async (_event, options: { method: string; path: string; headers?: any; body?: any }) => {
+  console.log('[API Proxy] Received request:', options.method, options.path); // Debug log
+
+  return new Promise((resolve, reject) => {
+    try {
+      const { method, path, headers = {}, body } = options;
+
+      // Determine the correct port based on the path
+      const port = getPortForPath(path);
+      const url = new URL(`http://localhost:${port}${path}`);
+
+      console.log('[API Proxy] Making request to:', url.toString()); // Debug log
+      console.log('[API Proxy] Request headers:', headers); // Debug log
+      if (body) {
+        console.log('[API Proxy] Request body (first 100 chars):', body.toString().substring(0, 100)); // Debug log
+      }
+
+      const requestOptions: http.RequestOptions = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        method: method.toUpperCase(),
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          'Content-Length': body ? Buffer.byteLength(body) : '0'
+        }
+      };
+
+      const requestModule = url.protocol === 'https:' ? https : http;
+
+      const req = requestModule.request(requestOptions, (res) => {
+        console.log('[API Proxy] Response status:', res.statusCode); // Debug log
+        console.log('[API Proxy] Response headers:', res.headers); // Debug log
+
+        let data = '';
+
+        res.on('data', (chunk) => {
+          console.log('[API Proxy] Received data chunk of length:', chunk.length); // Debug log
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          console.log('[API Proxy] Response ended, total data length:', data.length); // Debug log
+          console.log('[API Proxy] Response body (first 100 chars):', data.substring(0, 100)); // Debug log
+          console.log('[API Proxy] Response body type:', typeof data); // Debug log
+
+          resolve({
+            statusCode: res.statusCode,
+            headers: res.headers,
+            data: data
+          });
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('[API Proxy] Request error:', error); // Debug log
+        reject(error);
+      });
+
+      if (body) {
+        req.write(body);
+      }
+
+      req.end();
+    } catch (error) {
+      console.error('[API Proxy] Error in request processing:', error); // Debug log
+      reject(error);
+    }
+  });
+});
 
 console.log('IPC handlers registered')

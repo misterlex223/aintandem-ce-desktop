@@ -30,7 +30,7 @@ export class ConfigStore {
         services: {
           type: 'object',
           properties: {
-            backend: {
+            orchestrator: {
               type: 'object',
               properties: {
                 port: { type: 'number' },
@@ -47,7 +47,16 @@ export class ConfigStore {
           }
         },
         env: { type: 'object' },
-        ui: { type: 'object' }
+        ui: { type: 'object' },
+        updates: {
+          type: 'object',
+          properties: {
+            autoCheck: { type: 'boolean' },
+            autoDownload: { type: 'boolean' },
+            autoInstall: { type: 'boolean' },
+            channel: { type: 'string', enum: ['stable', 'beta', 'alpha'] }
+          }
+        }
       }
     })
       this.initialized = true
@@ -154,7 +163,7 @@ export class ConfigStore {
 
     // Validate ports
     const ports = [
-      { field: 'services.backend.port', value: config?.services?.backend?.port },
+      { field: 'services.orchestrator.port', value: config?.services?.orchestrator?.port },
       { field: 'services.codeServer.port', value: config?.services?.codeServer?.port }
     ]
 
@@ -168,6 +177,16 @@ export class ConfigStore {
         }
       }
     })
+
+    // Validate updates configuration if present
+    if (config?.updates) {
+      if (config.updates.channel && !['stable', 'beta', 'alpha'].includes(config.updates.channel)) {
+        errors.push({
+          field: 'updates.channel',
+          message: 'Update channel must be one of: stable, beta, alpha'
+        })
+      }
+    }
 
     return {
       valid: errors.length === 0,

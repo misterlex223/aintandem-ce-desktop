@@ -19,44 +19,17 @@ export interface ServiceDefinition {
  */
 export function getServiceDefinitions(): Record<string, ServiceDefinition> {
   return {
-    frontend: {
-      name: 'frontend',
-      displayName: 'Frontend',
-      description: 'Kai frontend web interface',
-      essential: false,
-      dependsOn: ['backend'], // Frontend depends on backend
-      containerConfig: (config: KaiConfig) => ({
-        name: 'kai-frontend',
-        image: 'ghcr.io/aintandem/kai-frontend:latest',
-        env: {
-          BACKEND_URL: `http://kai-backend:${config.services.backend.port}`,
-          NODE_ENV: config.services.backend.nodeEnv
-        },
-        ports: {
-          '80': '9901'  // Map host port 9901 to container port 80
-        },
-        networks: [config.env.dockerNetwork],
-        restart: 'unless-stopped',
-        healthcheck: {
-          test: ['CMD', 'wget', '-q', '--spider', 'http://localhost'], // Check internal container port
-          interval: 15000,
-          timeout: 5000,
-          retries: 3,
-          startPeriod: 10000
-        }
-      })
-    },
-    backend: {
-      name: 'backend',
-      displayName: 'Backend',
-      description: 'Kai backend API server',
+    orchestrator: {
+      name: 'orchestrator',
+      displayName: 'Orchestrator CE',
+      description: 'Orchestrator API server',
       essential: true,
       containerConfig: (config: KaiConfig) => ({
-        name: 'kai-backend',
-        image: 'ghcr.io/aintandem/kai-backend:latest',
+        name: 'aintandem-orchestrator-ce',
+        image: 'ghcr.io/aintandem/orchestrator-ce:latest',
         env: {
-          NODE_ENV: config.services.backend.nodeEnv,
-          PORT: config.services.backend.port.toString(),
+          NODE_ENV: config.services.orchestrator.nodeEnv,
+          PORT: config.services.orchestrator.port.toString(),
           DOCKER_NETWORK: config.env.dockerNetwork,
           IMAGE_NAME: config.env.imageName,
           KAI_BASE_ROOT: config.baseDirectory,
@@ -71,11 +44,11 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
           EMBEDDING_DIMENSIONS: config.env.embeddingDimensions.toString(),
           AUTO_CAPTURE_ENABLED: config.env.autoCaptureEnabled.toString(),
           EXTRACT_FACTS_ENABLED: config.env.extractFactsEnabled.toString(),
-          AUTH_USERNAME: config.services.backend.username || 'admin',
-          AUTH_PASSWORD: config.services.backend.password || 'aintandem'
+          AUTH_USERNAME: config.services.orchestrator.username || 'admin',
+          AUTH_PASSWORD: config.services.orchestrator.password || 'aintandem'
         },
         ports: {
-          [config.services.backend.port.toString()]: config.services.backend.port.toString()
+          [config.services.orchestrator.port.toString()]: config.services.orchestrator.port.toString()
         },
         volumes: [
           {
@@ -109,7 +82,7 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
       description: 'VS Code web IDE',
       essential: false,
       containerConfig: (config: KaiConfig) => ({
-        name: 'kai-code-server',
+        name: 'aintandem-code-server',
         image: 'ghcr.io/aintandem/code-server:latest',
         command: ['--bind-addr', '0.0.0.0:8080'],
         env: {
@@ -130,11 +103,11 @@ export function getServiceDefinitions(): Record<string, ServiceDefinition> {
             container: '/base-root'
           },
           {
-            host: join(config.baseDirectory, '.kai/code-server/config'),
+            host: join(config.baseDirectory, '.aintandem/code-server/config'),
             container: '/home/coder/.config'
           },
           {
-            host: join(config.baseDirectory, '.kai/code-server/local'),
+            host: join(config.baseDirectory, '.aintandem/code-server/local'),
             container: '/home/coder/.local'
           }
         ],

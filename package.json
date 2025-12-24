@@ -1,6 +1,6 @@
 {
-  "name": "aintandem-desktop",
-  "version": "0.5.0",
+  "name": "@aintandem/ce-desktop",
+  "version": "0.5.1-alpha.1",
   "description": "AInTandem Desktop — Your local AI sandbox for safe, collaborative building",
   "main": "out/main/index.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "dist:bundled:all": "node scripts/download-bundled-runtime.js && pnpm dist",
     "download-runtime": "node scripts/download-bundled-runtime.js",
     "lint": "eslint src --ext .ts,.tsx",
-    "lint:fix": "eslint src --ext .ts,.tsx --fix"
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "release": "electron-builder --publish=always"
   },
   "keywords": [
     "electron",
@@ -57,8 +58,9 @@
     "electron-updater": "^6.6.2"
   },
   "build": {
-    "appId": "org.aintandem-desktop",
+    "appId": "org.aintandem.ce-desktop",
     "productName": "AInTandem Desktop",
+    "icon": "build_assets/icon.png",
     "directories": {
       "buildResources": "build",
       "output": "dist"
@@ -76,26 +78,45 @@
         ]
       }
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "aintandem",
+        "repo": "ce-desktop"
+      }
+    ],
     "mac": {
+      "icon": "build_assets/icon.png",
       "target": [
         "dmg",
         "zip"
       ],
       "category": "public.app-category.developer-tools",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "publish": [
+        "github"
+      ]
     },
     "win": {
+      "icon": "build_assets/icon.png",
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "publish": [
+        "github"
+      ]
     },
     "linux": {
+      "icon": "build_assets/icon.png",
       "target": [
         "AppImage"
       ],
       "category": "Development",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "publish": [
+        "github"
+      ]
     },
     "nsis": {
       "oneClick": false,

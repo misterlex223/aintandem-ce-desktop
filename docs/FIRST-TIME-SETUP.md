@@ -37,7 +37,7 @@ interface KaiConfig {
   preferredRuntime: 'auto' | 'docker' | 'containerd' | 'lima'
   baseDirectory: string
   services: {
-    backend: { port: number, nodeEnv: 'development' | 'production' }
+    orchestrator: { port: number, nodeEnv: 'development' | 'production' }
     codeServer: { password: string, port: number }
   }
 }
